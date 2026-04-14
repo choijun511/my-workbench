@@ -62,7 +62,7 @@ export default function TodoPage() {
   };
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-screen-xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">待办事项</h1>

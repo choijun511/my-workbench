@@ -30,7 +30,7 @@ export default function FengshenPage() {
   const selected = panels?.find(p => p.id === activePanel);
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-full">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">风神看板</h1>
@@ -126,7 +126,7 @@ export default function FengshenPage() {
         </div>
 
         {/* Iframe View */}
-        <div className="flex-1 min-h-[600px]">
+        <div className="flex-1 min-h-[600px] 2xl:min-h-[800px]">
           {selected ? (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden h-full">
               <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">

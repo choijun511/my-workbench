@@ -35,7 +35,7 @@ export default function OKRPage() {
   };
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-screen-xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">OKR 目标跟踪</h1>
@@ -76,9 +76,9 @@ export default function OKRPage() {
       </div>
 
       {/* Objectives List */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
         {!objectives?.length ? (
-          <div className="text-center py-12 text-slate-400">
+          <div className="text-center py-12 text-slate-400 col-span-full">
             <p className="text-sm">当前季度暂无 OKR 目标</p>
           </div>
         ) : (
