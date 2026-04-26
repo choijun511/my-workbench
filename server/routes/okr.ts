@@ -102,10 +102,16 @@ router.get('/objectives', (req, res) => {
   res.json(objectivesWithKRs);
 });
 
+const OBJECTIVE_LIMIT_PER_QUARTER = 30;
+
 // Create objective
 router.post('/objectives', (req, res) => {
   const { quarter, title, project_id } = req.body;
   const q = quarter || getCurrentQuarter();
+  const count = db.prepare('SELECT COUNT(*) AS c FROM okr_objectives WHERE quarter = ?').get(q) as { c: number };
+  if (count.c >= OBJECTIVE_LIMIT_PER_QUARTER) {
+    return res.status(400).json({ error: `每个季度最多添加 ${OBJECTIVE_LIMIT_PER_QUARTER} 个 Objective` });
+  }
   const pid = project_id || ensureDefaultProject(q);
   const result = db.prepare(`
     INSERT INTO okr_objectives (quarter, title, project_id) VALUES (?, ?, ?)

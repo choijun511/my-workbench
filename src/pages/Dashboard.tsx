@@ -44,8 +44,8 @@ export default function Dashboard() {
           {!objectives?.length ? (
             <p className="text-sm text-slate-400 py-4">暂无 OKR 目标，去创建一个吧</p>
           ) : (
-            <div className="space-y-3">
-              {objectives.slice(0, 4).map(obj => (
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              {objectives.slice(0, 30).map(obj => (
                 <div key={obj.id}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm text-slate-700 truncate flex-1">{obj.title}</span>
