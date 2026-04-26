@@ -76,4 +76,19 @@ if (!objectiveCols.find(c => c.name === 'project_id')) {
   db.exec(`ALTER TABLE okr_objectives ADD COLUMN project_id INTEGER REFERENCES okr_projects(id) ON DELETE SET NULL`);
 }
 
+const todoCols = db.prepare("PRAGMA table_info(todos)").all() as { name: string }[];
+const todoColNames = new Set(todoCols.map(c => c.name));
+for (const [col, type] of [['source', 'TEXT'], ['source_ref', 'TEXT'], ['source_url', 'TEXT']]) {
+  if (!todoColNames.has(col)) db.exec(`ALTER TABLE todos ADD COLUMN ${col} ${type}`);
+}
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_todos_source_ref ON todos(source, source_ref) WHERE source_ref IS NOT NULL`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sync_state (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
 export default db;

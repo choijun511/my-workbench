@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi';
-import type { Todo } from '../types';
-import { Plus, Trash2, Check, Circle, Clock, Filter, Inbox, ArrowRight, Lightbulb } from 'lucide-react';
+import type { Todo, FeishuStatus, FeishuSyncResult } from '../types';
+import { Plus, Trash2, Check, Circle, Clock, Filter, Inbox, ArrowRight, Lightbulb, RefreshCw, ExternalLink, MessageCircle } from 'lucide-react';
 
 const priorityConfig = {
   P0: { label: 'P0 紧急', color: 'bg-red-100 text-red-600 border-red-200' },
@@ -27,11 +27,38 @@ type FilterType = 'all' | 'todo' | 'in_progress' | 'done' | 'draft';
 
 export default function TodoPage() {
   const { data: todos, refetch } = useApi<Todo[]>('/api/todos');
+  const { data: feishuStatus, refetch: refetchStatus } = useApi<FeishuStatus>('/api/feishu/status');
   const [filter, setFilter] = useState<FilterType>('all');
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newPriority, setNewPriority] = useState<'P0' | 'P1' | 'P2' | 'P3'>('P2');
   const [newUrgency, setNewUrgency] = useState<'urgent' | 'normal' | 'low'>('normal');
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  const runSync = async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch('/api/feishu/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ window_hours: 24 }),
+      });
+      const data: FeishuSyncResult = await res.json();
+      if (data.ok) {
+        setSyncMsg(`同步完成：扫描 ${data.chats_scanned} 个会话/${data.messages_scanned} 条消息，识别 ${data.todos_extracted} 个 todo，新增 ${data.todos_inserted} 条草稿`);
+      } else {
+        setSyncMsg(`同步失败：${data.error || '未知错误'}`);
+      }
+      refetch();
+      refetchStatus();
+    } catch (e) {
+      setSyncMsg(`同步失败：${(e as Error).message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const filteredTodos = todos?.filter(t => {
     if (filter === 'draft') return t.status === 'draft';
@@ -174,6 +201,32 @@ export default function TodoPage() {
         </button>
       </div>
 
+      {/* Draft sync bar */}
+      {filter === 'draft' && (
+        <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 bg-amber-50/40 border border-amber-100 rounded-lg text-xs">
+          <MessageCircle size={14} className="text-amber-600" />
+          <span className="text-slate-600">
+            飞书同步：
+            {feishuStatus?.configured
+              ? feishuStatus.last_sync_at
+                ? `上次同步 ${formatTime(feishuStatus.last_sync_at)}`
+                : '尚未同步'
+              : '未配置'}
+          </span>
+          <button
+            onClick={runSync}
+            disabled={syncing || !feishuStatus?.configured}
+            className="ml-auto flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 text-slate-700 rounded-md hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
+            {syncing ? '同步中...' : '立即同步'}
+          </button>
+          {syncMsg && (
+            <p className="basis-full text-slate-600">{syncMsg}</p>
+          )}
+        </div>
+      )}
+
       {/* Todo List */}
       <div className="space-y-2">
         {!filteredTodos.length ? (
@@ -205,6 +258,13 @@ export default function TodoPage() {
   );
 }
 
+function formatTime(s: string): string {
+  const d = new Date(s.replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return s;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function DraftRow({
   todo,
   onPromote,
@@ -214,13 +274,25 @@ function DraftRow({
   onPromote: (id: number) => void;
   onDelete: (id: number) => void;
 }) {
+  const Icon = todo.source === 'feishu' ? MessageCircle : Lightbulb;
+  const iconColor = todo.source === 'feishu' ? 'text-blue-500' : 'text-amber-500';
   return (
     <div className="flex items-start gap-3 bg-amber-50/40 rounded-xl border border-amber-100 px-5 py-4 group hover:border-amber-200 transition-colors">
-      <Lightbulb size={18} className="text-amber-500 mt-0.5 flex-shrink-0" />
+      <Icon size={18} className={`${iconColor} mt-0.5 flex-shrink-0`} />
       <div className="flex-1 min-w-0">
         <p className="text-sm text-slate-700 break-words">{todo.title}</p>
         {todo.description && (
           <p className="text-xs text-slate-500 mt-1 break-words">{todo.description}</p>
+        )}
+        {todo.source === 'feishu' && todo.source_url && (
+          <a
+            href={todo.source_url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 mt-1 text-[11px] text-blue-500 hover:underline"
+          >
+            <ExternalLink size={10} /> 飞书原消息
+          </a>
         )}
       </div>
       <button

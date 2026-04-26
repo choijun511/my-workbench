@@ -44,8 +44,28 @@ export interface Todo {
   urgency: 'urgent' | 'normal' | 'low';
   status: 'draft' | 'todo' | 'in_progress' | 'done';
   due_date: string | null;
+  source: string | null;
+  source_ref: string | null;
+  source_url: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface FeishuSyncResult {
+  ok: boolean;
+  chats_scanned: number;
+  messages_scanned: number;
+  todos_extracted: number;
+  todos_inserted: number;
+  duration_ms: number;
+  error?: string;
+}
+
+export interface FeishuStatus {
+  configured: boolean;
+  missing: string[];
+  last_sync_at: string | null;
+  last_sync_result: FeishuSyncResult | null;
 }
 
 export interface FengshenPanel {
