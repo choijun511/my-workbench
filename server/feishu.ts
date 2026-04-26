@@ -146,6 +146,20 @@ export async function sendTextToOpenId(openId: string, text: string): Promise<an
   return res.json();
 }
 
+export async function sendTextToEmail(email: string, text: string): Promise<any> {
+  const token = await getTenantAccessToken();
+  const res = await fetch(`${BASE}/im/v1/messages?receive_id_type=email`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      receive_id: email,
+      msg_type: 'text',
+      content: JSON.stringify({ text }),
+    }),
+  });
+  return res.json();
+}
+
 export async function getBotInfo(): Promise<any> {
   const token = await getTenantAccessToken();
   const res = await fetch(`${BASE}/bot/v3/info`, {

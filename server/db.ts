@@ -105,6 +105,12 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_feishu_messages_create_time ON feishu_messages(create_time);
+
+  CREATE TABLE IF NOT EXISTS feishu_pull_chats (
+    chat_id TEXT PRIMARY KEY,
+    label TEXT,
+    added_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 export default db;
