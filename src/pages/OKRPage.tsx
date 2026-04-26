@@ -320,7 +320,7 @@ function ObjectiveCard({
                   </div>
                 )}
               </div>
-              <h3 className="text-base font-semibold text-slate-800 truncate flex-1 min-w-0">{objective.title}</h3>
+              <h3 className="text-base font-semibold text-slate-800 break-words flex-1 min-w-0">{objective.title}</h3>
               <div className="relative">
                 <button
                   onClick={() => setEditingStatus(!editingStatus)}
@@ -438,9 +438,9 @@ function KRRow({ kr, onUpdate }: { kr: KeyResult; onUpdate: () => void }) {
 
   return (
     <div className="bg-white rounded-lg border border-slate-100">
-      <div className="flex items-center gap-3 py-2 px-3">
+      <div className="flex items-start gap-3 py-2 px-3">
         <div className="flex-1 min-w-0">
-          <span className="text-sm text-slate-700 truncate block">{kr.title}</span>
+          <span className="text-sm text-slate-700 break-words whitespace-pre-wrap">{kr.title}</span>
         </div>
         {editing ? (
           <div className="flex items-center gap-1">
