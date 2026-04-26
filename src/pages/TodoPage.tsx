@@ -47,7 +47,7 @@ export default function TodoPage() {
       });
       const data: FeishuSyncResult = await res.json();
       if (data.ok) {
-        setSyncMsg(`同步完成：扫描 ${data.chats_scanned} 个会话/${data.messages_scanned} 条消息，识别 ${data.todos_extracted} 个 todo，新增 ${data.todos_inserted} 条草稿`);
+        setSyncMsg(`同步完成：扫描 ${data.messages_scanned} 条消息，识别 ${data.todos_extracted} 个 todo，新增 ${data.todos_inserted} 条草稿`);
       } else {
         setSyncMsg(`同步失败：${data.error || '未知错误'}`);
       }
@@ -209,9 +209,14 @@ export default function TodoPage() {
             飞书同步：
             {feishuStatus?.configured
               ? feishuStatus.last_sync_at
-                ? `上次同步 ${formatTime(feishuStatus.last_sync_at)}`
+                ? `上次 ${formatTime(feishuStatus.last_sync_at)}`
                 : '尚未同步'
               : '未配置'}
+            {feishuStatus?.messages && (
+              <span className="ml-2 text-slate-400">
+                · 24h 收到 {feishuStatus.messages.recent_24h} 条
+              </span>
+            )}
           </span>
           <button
             onClick={runSync}

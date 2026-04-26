@@ -53,7 +53,6 @@ export interface Todo {
 
 export interface FeishuSyncResult {
   ok: boolean;
-  chats_scanned: number;
   messages_scanned: number;
   todos_extracted: number;
   todos_inserted: number;
@@ -66,6 +65,7 @@ export interface FeishuStatus {
   missing: string[];
   last_sync_at: string | null;
   last_sync_result: FeishuSyncResult | null;
+  messages: { total: number; recent_24h: number; pending: number };
 }
 
 export interface FengshenPanel {

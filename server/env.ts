@@ -21,7 +21,7 @@ export const env = {
   FEISHU_APP_ID: process.env.FEISHU_APP_ID || '',
   FEISHU_APP_SECRET: process.env.FEISHU_APP_SECRET || '',
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
-  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
 };
 
 export function envReady(): { ok: boolean; missing: string[] } {

@@ -81,7 +81,8 @@ const todoColNames = new Set(todoCols.map(c => c.name));
 for (const [col, type] of [['source', 'TEXT'], ['source_ref', 'TEXT'], ['source_url', 'TEXT']]) {
   if (!todoColNames.has(col)) db.exec(`ALTER TABLE todos ADD COLUMN ${col} ${type}`);
 }
-db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_todos_source_ref ON todos(source, source_ref) WHERE source_ref IS NOT NULL`);
+db.exec(`DROP INDEX IF EXISTS idx_todos_source_ref`);
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_todos_source_ref_title ON todos(source, source_ref, title) WHERE source_ref IS NOT NULL`);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS sync_state (
@@ -89,6 +90,21 @@ db.exec(`
     value TEXT,
     updated_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS feishu_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id TEXT UNIQUE NOT NULL,
+    chat_id TEXT,
+    chat_type TEXT,
+    sender_id TEXT,
+    msg_type TEXT,
+    content TEXT,
+    create_time INTEGER,
+    received_at TEXT DEFAULT (datetime('now')),
+    processed_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_feishu_messages_create_time ON feishu_messages(create_time);
 `);
 
 export default db;
