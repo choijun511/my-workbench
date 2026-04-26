@@ -5,11 +5,12 @@ const router = Router();
 
 // Get all todos with optional filters
 router.get('/', (req, res) => {
-  const { status, priority, urgency } = req.query;
+  const { status, priority, urgency, exclude_draft } = req.query;
   let sql = 'SELECT * FROM todos WHERE 1=1';
   const params: any[] = [];
 
   if (status) { sql += ' AND status = ?'; params.push(status); }
+  else if (exclude_draft) { sql += " AND status != 'draft'"; }
   if (priority) { sql += ' AND priority = ?'; params.push(priority); }
   if (urgency) { sql += ' AND urgency = ?'; params.push(urgency); }
 
@@ -18,12 +19,19 @@ router.get('/', (req, res) => {
   res.json(db.prepare(sql).all(...params));
 });
 
-// Create todo
+// Create todo (or draft when status='draft')
 router.post('/', (req, res) => {
-  const { title, description, priority, urgency, due_date } = req.body;
+  const { title, description, priority, urgency, due_date, status } = req.body;
   const result = db.prepare(`
-    INSERT INTO todos (title, description, priority, urgency, due_date) VALUES (?, ?, ?, ?, ?)
-  `).run(title, description || '', priority || 'P2', urgency || 'normal', due_date || null);
+    INSERT INTO todos (title, description, priority, urgency, due_date, status) VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    title,
+    description || '',
+    priority || 'P2',
+    urgency || 'normal',
+    due_date || null,
+    status || 'todo'
+  );
   const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(result.lastInsertRowid);
   res.json(todo);
 });

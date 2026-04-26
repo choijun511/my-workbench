@@ -42,7 +42,7 @@ export interface Todo {
   description: string;
   priority: 'P0' | 'P1' | 'P2' | 'P3';
   urgency: 'urgent' | 'normal' | 'low';
-  status: 'todo' | 'in_progress' | 'done';
+  status: 'draft' | 'todo' | 'in_progress' | 'done';
   due_date: string | null;
   created_at: string;
   updated_at: string;

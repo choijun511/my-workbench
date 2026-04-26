@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi';
 import type { Todo } from '../types';
-import { Plus, Trash2, Check, Circle, Clock, Filter } from 'lucide-react';
+import { Plus, Trash2, Check, Circle, Clock, Filter, Inbox, ArrowRight, Lightbulb } from 'lucide-react';
 
 const priorityConfig = {
   P0: { label: 'P0 紧急', color: 'bg-red-100 text-red-600 border-red-200' },
@@ -17,12 +17,13 @@ const urgencyConfig = {
 };
 
 const statusConfig = {
+  draft: { label: '草稿', icon: Lightbulb },
   todo: { label: '待办', icon: Circle },
   in_progress: { label: '进行中', icon: Clock },
   done: { label: '已完成', icon: Check },
 };
 
-type FilterType = 'all' | 'todo' | 'in_progress' | 'done';
+type FilterType = 'all' | 'todo' | 'in_progress' | 'done' | 'draft';
 
 export default function TodoPage() {
   const { data: todos, refetch } = useApi<Todo[]>('/api/todos');
@@ -32,11 +33,20 @@ export default function TodoPage() {
   const [newPriority, setNewPriority] = useState<'P0' | 'P1' | 'P2' | 'P3'>('P2');
   const [newUrgency, setNewUrgency] = useState<'urgent' | 'normal' | 'low'>('normal');
 
-  const filteredTodos = todos?.filter(t => filter === 'all' || t.status === filter) || [];
+  const filteredTodos = todos?.filter(t => {
+    if (filter === 'draft') return t.status === 'draft';
+    if (filter === 'all') return t.status !== 'draft';
+    return t.status === filter;
+  }) || [];
 
-  const addTodo = async () => {
+  const addTodo = async (asDraft = false) => {
     if (!newTitle.trim()) return;
-    await apiPost('/api/todos', { title: newTitle, priority: newPriority, urgency: newUrgency });
+    await apiPost('/api/todos', {
+      title: newTitle,
+      priority: newPriority,
+      urgency: newUrgency,
+      status: asDraft ? 'draft' : 'todo',
+    });
     setNewTitle('');
     setNewPriority('P2');
     setNewUrgency('normal');
@@ -55,10 +65,11 @@ export default function TodoPage() {
   };
 
   const counts = {
-    all: todos?.length || 0,
+    all: todos?.filter(t => t.status !== 'draft').length || 0,
     todo: todos?.filter(t => t.status === 'todo').length || 0,
     in_progress: todos?.filter(t => t.status === 'in_progress').length || 0,
     done: todos?.filter(t => t.status === 'done').length || 0,
+    draft: todos?.filter(t => t.status === 'draft').length || 0,
   };
 
   return (
@@ -82,8 +93,8 @@ export default function TodoPage() {
           <input
             value={newTitle}
             onChange={e => setNewTitle(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addTodo()}
-            placeholder="输入待办事项..."
+            onKeyDown={e => e.key === 'Enter' && addTodo(filter === 'draft')}
+            placeholder={filter === 'draft' ? '记录一个想法（草稿）...' : '输入待办事项...'}
             className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-3"
             autoFocus
           />
@@ -116,46 +127,115 @@ export default function TodoPage() {
                 </button>
               ))}
             </div>
-            <button onClick={addTodo} className="ml-auto px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
-              添加
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => addTodo(true)}
+                className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-sm hover:border-indigo-300 hover:text-indigo-600 flex items-center gap-1"
+                title="存到草稿箱"
+              >
+                <Lightbulb size={14} /> 存为草稿
+              </button>
+              <button
+                onClick={() => addTodo(false)}
+                className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"
+              >
+                添加
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Filter Tabs */}
-      <div className="flex gap-1 mb-4 bg-slate-100 rounded-lg p-1 w-fit">
-        {([['all', '全部'], ['todo', '待办'], ['in_progress', '进行中'], ['done', '已完成']] as const).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setFilter(key)}
-            className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
-              filter === key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {label} ({counts[key]})
-          </button>
-        ))}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+          {([['all', '全部'], ['todo', '待办'], ['in_progress', '进行中'], ['done', '已完成']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                filter === key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {label} ({counts[key]})
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setFilter('draft')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors border ${
+            filter === 'draft'
+              ? 'bg-amber-50 border-amber-200 text-amber-700'
+              : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+          }`}
+          title="草稿箱：存放还没决定要做的想法"
+        >
+          <Inbox size={14} /> 草稿箱 ({counts.draft})
+        </button>
       </div>
 
       {/* Todo List */}
       <div className="space-y-2">
         {!filteredTodos.length ? (
           <div className="text-center py-12 text-slate-400">
-            <Filter size={32} className="mx-auto mb-2 opacity-50" />
-            <p className="text-sm">暂无待办事项</p>
+            {filter === 'draft' ? <Inbox size={32} className="mx-auto mb-2 opacity-50" /> : <Filter size={32} className="mx-auto mb-2 opacity-50" />}
+            <p className="text-sm">{filter === 'draft' ? '草稿箱是空的，先记录一些想法吧' : '暂无待办事项'}</p>
           </div>
         ) : (
           filteredTodos.map(todo => (
-            <TodoRow
-              key={todo.id}
-              todo={todo}
-              onStatusChange={updateStatus}
-              onDelete={deleteTodo}
-            />
+            todo.status === 'draft' ? (
+              <DraftRow
+                key={todo.id}
+                todo={todo}
+                onPromote={(id) => updateStatus(id, 'todo')}
+                onDelete={deleteTodo}
+              />
+            ) : (
+              <TodoRow
+                key={todo.id}
+                todo={todo}
+                onStatusChange={updateStatus}
+                onDelete={deleteTodo}
+              />
+            )
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function DraftRow({
+  todo,
+  onPromote,
+  onDelete,
+}: {
+  todo: Todo;
+  onPromote: (id: number) => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <div className="flex items-start gap-3 bg-amber-50/40 rounded-xl border border-amber-100 px-5 py-4 group hover:border-amber-200 transition-colors">
+      <Lightbulb size={18} className="text-amber-500 mt-0.5 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-slate-700 break-words">{todo.title}</p>
+        {todo.description && (
+          <p className="text-xs text-slate-500 mt-1 break-words">{todo.description}</p>
+        )}
+      </div>
+      <button
+        onClick={() => onPromote(todo.id)}
+        className="text-xs px-2.5 py-1 rounded-md border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1 flex-shrink-0"
+        title="移到待办"
+      >
+        <ArrowRight size={12} /> 转待办
+      </button>
+      <button
+        onClick={() => onDelete(todo.id)}
+        className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+      >
+        <Trash2 size={15} />
+      </button>
     </div>
   );
 }
