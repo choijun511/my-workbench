@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { runFeishuSync, getLastSync, getMessageStats } from '../sync.js';
 import { envReady } from '../env.js';
+import { lookupUserByEmail, sendTextToOpenId, getBotInfo } from '../feishu.js';
 
 const router = Router();
 
@@ -21,6 +22,36 @@ router.get('/status', (_req, res) => {
     last_sync_result: last.value ? JSON.parse(last.value) : null,
     messages: stats,
   });
+});
+
+router.get('/whoami', async (req, res) => {
+  const email = String(req.query.email || '');
+  if (!email) return res.status(400).json({ error: 'email query required' });
+  try {
+    const data = await lookupUserByEmail(email);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+router.get('/bot-info', async (_req, res) => {
+  try {
+    res.json(await getBotInfo());
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+router.post('/test-send', async (req, res) => {
+  const openId = String(req.body?.open_id || req.query.open_id || '');
+  const text = String(req.body?.text || '来自 my-workbench 的测试消息');
+  if (!openId) return res.status(400).json({ error: 'open_id required' });
+  try {
+    res.json(await sendTextToOpenId(openId, text));
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
 });
 
 router.post('/sync', async (req, res) => {

@@ -121,3 +121,35 @@ export function extractText(msg: FeishuMessage): string {
 export function feishuMessageUrl(msgId: string): string {
   return `https://www.feishu.cn/messenger/links/messageId/${msgId}`;
 }
+
+export async function lookupUserByEmail(email: string): Promise<any> {
+  const token = await getTenantAccessToken();
+  const res = await fetch(`${BASE}/contact/v3/users/batch_get_id?user_id_type=open_id`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emails: [email] }),
+  });
+  return res.json();
+}
+
+export async function sendTextToOpenId(openId: string, text: string): Promise<any> {
+  const token = await getTenantAccessToken();
+  const res = await fetch(`${BASE}/im/v1/messages?receive_id_type=open_id`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      receive_id: openId,
+      msg_type: 'text',
+      content: JSON.stringify({ text }),
+    }),
+  });
+  return res.json();
+}
+
+export async function getBotInfo(): Promise<any> {
+  const token = await getTenantAccessToken();
+  const res = await fetch(`${BASE}/bot/v3/info`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+}
