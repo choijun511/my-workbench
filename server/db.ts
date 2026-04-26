@@ -111,6 +111,18 @@ db.exec(`
     label TEXT,
     added_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS panel_insights (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    panel_id INTEGER NOT NULL,
+    source TEXT,
+    content TEXT,
+    result TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (panel_id) REFERENCES fengshen_panels(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_panel_insights_panel ON panel_insights(panel_id, created_at DESC);
 `);
 
 export default db;

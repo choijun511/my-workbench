@@ -72,3 +72,93 @@ export async function extractTodosFromMessages(
     return [];
   }
 }
+
+interface PanelAnalysisInput {
+  panelName: string;
+  panelDescription: string;
+  text: string;
+  imageBase64: string;
+  imageMime: string;
+}
+
+export interface PanelAnalysisResult {
+  summary: string;
+  anomalies: Array<{ metric: string; observation: string; severity: 'high' | 'medium' | 'low' }>;
+  insights: string[];
+  generated_at: string;
+}
+
+const PANEL_PROMPT = `你是一名数据分析师，正在帮用户分析一份内部业务看板的当日快照。
+
+请基于看板的图片或文字描述，输出三类内容：
+1. summary：一句话概括今日整体表现（中文，30-80 字）
+2. anomalies：异常数据提醒（环比/同比/历史均值偏离、突增突降、断崖、归零等）。每条包含 metric（指标名）、observation（中文描述偏离方向和幅度）、severity（high/medium/low）。如果没有明显异常，返回空数组。
+3. insights：关键数据洞察（不只是描述数字，要给出业务含义或行动建议），3-5 条，每条 1-2 句话，中文。
+
+要求：
+- 只基于图片/文字中真实存在的数据，不要编造
+- 数值精度尊重原图，不要四舍五入丢失信息
+- 严禁泛泛而谈（"建议关注趋势"这种废话不要）
+
+返回 JSON: { "summary": "...", "anomalies": [...], "insights": [...] }`;
+
+export async function analyzePanelData(input: PanelAnalysisInput): Promise<PanelAnalysisResult> {
+  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY 未配置');
+
+  const parts: any[] = [
+    {
+      text:
+        `${PANEL_PROMPT}\n\n看板名称：${input.panelName}` +
+        (input.panelDescription ? `\n看板描述：${input.panelDescription}` : '') +
+        (input.text ? `\n\n用户提供的数据/文字摘要：\n${input.text}` : ''),
+    },
+  ];
+  if (input.imageBase64) {
+    parts.push({ inline_data: { mime_type: input.imageMime, data: input.imageBase64 } });
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`;
+  const body = {
+    contents: [{ parts }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          summary: { type: 'STRING' },
+          anomalies: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                metric: { type: 'STRING' },
+                observation: { type: 'STRING' },
+                severity: { type: 'STRING' },
+              },
+              required: ['metric', 'observation', 'severity'],
+            },
+          },
+          insights: { type: 'ARRAY', items: { type: 'STRING' } },
+        },
+        required: ['summary', 'anomalies', 'insights'],
+      },
+      temperature: 0.3,
+    },
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Gemini error: ${data?.error?.message || res.statusText}`);
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const parsed = JSON.parse(text);
+  return {
+    summary: parsed.summary || '',
+    anomalies: parsed.anomalies || [],
+    insights: parsed.insights || [],
+    generated_at: new Date().toISOString(),
+  };
+}

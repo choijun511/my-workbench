@@ -75,3 +75,25 @@ export interface FengshenPanel {
   description: string;
   sort_order: number;
 }
+
+export interface PanelInsightAnomaly {
+  metric: string;
+  observation: string;
+  severity: 'high' | 'medium' | 'low';
+}
+
+export interface PanelInsightResult {
+  summary: string;
+  anomalies: PanelInsightAnomaly[];
+  insights: string[];
+  generated_at?: string;
+}
+
+export interface PanelInsight {
+  id: number;
+  panel_id: number;
+  source: 'image' | 'text';
+  content: string;
+  result: string; // JSON-stringified PanelInsightResult
+  created_at: string;
+}
