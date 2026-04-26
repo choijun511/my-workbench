@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi';
-import type { Objective, KeyResult, OKRProject } from '../types';
-import { Plus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, Folder } from 'lucide-react';
+import type { Objective, KeyResult, OKRProject, KRLog } from '../types';
+import { Plus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, Folder, MessageSquare } from 'lucide-react';
 
 function getCurrentQuarter() {
   const now = new Date();
@@ -389,6 +389,38 @@ function ObjectiveCard({
 function KRRow({ kr, onUpdate }: { kr: KeyResult; onUpdate: () => void }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(kr.current_value);
+  const [showLogs, setShowLogs] = useState(false);
+  const [logs, setLogs] = useState<KRLog[] | null>(null);
+  const [newLog, setNewLog] = useState('');
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  const fetchLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const res = await fetch(`/api/okr/key-results/${kr.id}/logs`);
+      setLogs(await res.json());
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  const toggleLogs = () => {
+    const next = !showLogs;
+    setShowLogs(next);
+    if (next && logs === null) fetchLogs();
+  };
+
+  const addLog = async () => {
+    if (!newLog.trim()) return;
+    await apiPost(`/api/okr/key-results/${kr.id}/logs`, { content: newLog });
+    setNewLog('');
+    fetchLogs();
+  };
+
+  const removeLog = async (id: number) => {
+    await apiDelete(`/api/okr/kr-logs/${id}`);
+    fetchLogs();
+  };
 
   const save = async () => {
     await apiPut(`/api/okr/key-results/${kr.id}`, { current_value: value });
@@ -402,36 +434,101 @@ function KRRow({ kr, onUpdate }: { kr: KeyResult; onUpdate: () => void }) {
   };
 
   const pct = Math.round((kr.current_value / kr.target_value) * 100);
+  const logCount = logs?.length;
 
   return (
-    <div className="flex items-center gap-3 py-2 px-3 bg-white rounded-lg border border-slate-100">
-      <div className="flex-1 min-w-0">
-        <span className="text-sm text-slate-700 truncate block">{kr.title}</span>
-      </div>
-      {editing ? (
-        <div className="flex items-center gap-1">
-          <input
-            type="number"
-            value={value}
-            onChange={e => setValue(Number(e.target.value))}
-            className="w-16 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            autoFocus
-          />
-          <span className="text-xs text-slate-400">/ {kr.target_value}{kr.unit}</span>
-          <button onClick={save} className="text-emerald-500 hover:text-emerald-700"><Check size={14} /></button>
-          <button onClick={() => setEditing(false)} className="text-slate-400 hover:text-slate-600"><X size={14} /></button>
+    <div className="bg-white rounded-lg border border-slate-100">
+      <div className="flex items-center gap-3 py-2 px-3">
+        <div className="flex-1 min-w-0">
+          <span className="text-sm text-slate-700 truncate block">{kr.title}</span>
         </div>
-      ) : (
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">{kr.current_value}/{kr.target_value}{kr.unit}</span>
-          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
+        {editing ? (
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              value={value}
+              onChange={e => setValue(Number(e.target.value))}
+              className="w-16 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              autoFocus
+            />
+            <span className="text-xs text-slate-400">/ {kr.target_value}{kr.unit}</span>
+            <button onClick={save} className="text-emerald-500 hover:text-emerald-700"><Check size={14} /></button>
+            <button onClick={() => setEditing(false)} className="text-slate-400 hover:text-slate-600"><X size={14} /></button>
           </div>
-          <span className="text-xs font-medium text-slate-600 w-8">{pct}%</span>
-          <button onClick={() => setEditing(true)} className="text-slate-300 hover:text-indigo-500"><Edit3 size={13} /></button>
-          <button onClick={remove} className="text-slate-300 hover:text-red-500"><Trash2 size={13} /></button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">{kr.current_value}/{kr.target_value}{kr.unit}</span>
+            <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
+            </div>
+            <span className="text-xs font-medium text-slate-600 w-8">{pct}%</span>
+            <button
+              onClick={toggleLogs}
+              className={`flex items-center gap-0.5 ${showLogs ? 'text-indigo-500' : 'text-slate-300 hover:text-indigo-500'}`}
+              title="进展日志"
+            >
+              <MessageSquare size={13} />
+              {logCount !== undefined && logCount > 0 && (
+                <span className="text-[10px] font-medium">{logCount}</span>
+              )}
+            </button>
+            <button onClick={() => setEditing(true)} className="text-slate-300 hover:text-indigo-500"><Edit3 size={13} /></button>
+            <button onClick={remove} className="text-slate-300 hover:text-red-500"><Trash2 size={13} /></button>
+          </div>
+        )}
+      </div>
+
+      {showLogs && (
+        <div className="border-t border-slate-100 px-3 py-2.5 bg-slate-50/60 space-y-2">
+          <div className="flex gap-2">
+            <input
+              value={newLog}
+              onChange={e => setNewLog(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addLog()}
+              placeholder="记录关键进展..."
+              className="flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            />
+            <button
+              onClick={addLog}
+              disabled={!newLog.trim()}
+              className="px-2.5 py-1.5 bg-indigo-600 text-white rounded-md text-xs hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center"
+            >
+              <Plus size={13} />
+            </button>
+          </div>
+          {loadingLogs && logs === null ? (
+            <p className="text-xs text-slate-400 py-2">加载中...</p>
+          ) : !logs?.length ? (
+            <p className="text-xs text-slate-400 py-1">暂无进展记录</p>
+          ) : (
+            <ul className="space-y-1">
+              {logs.map(log => (
+                <li key={log.id} className="group flex items-start gap-2 py-1.5 px-2 rounded bg-white border border-slate-100">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-700 whitespace-pre-wrap break-words">{log.content}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{formatLogTime(log.created_at)}</p>
+                  </div>
+                  <button
+                    onClick={() => removeLog(log.id)}
+                    className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="删除"
+                  >
+                    <X size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+function formatLogTime(s: string): string {
+  // SQLite returns "YYYY-MM-DD HH:MM:SS" in UTC
+  const d = new Date(s.replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return s;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

@@ -42,6 +42,14 @@ db.exec(`
     FOREIGN KEY (objective_id) REFERENCES okr_objectives(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS okr_kr_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kr_id INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (kr_id) REFERENCES okr_key_results(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS todos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,

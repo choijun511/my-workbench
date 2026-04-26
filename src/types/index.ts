@@ -20,6 +20,13 @@ export interface Objective {
   updated_at: string;
 }
 
+export interface KRLog {
+  id: number;
+  kr_id: number;
+  content: string;
+  created_at: string;
+}
+
 export interface OKRProject {
   id: number;
   quarter: string;

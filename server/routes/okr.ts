@@ -165,6 +165,33 @@ router.delete('/key-results/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// List KR logs
+router.get('/key-results/:id/logs', (req, res) => {
+  const logs = db.prepare(
+    `SELECT * FROM okr_kr_logs WHERE kr_id = ? ORDER BY created_at DESC, id DESC`
+  ).all(req.params.id);
+  res.json(logs);
+});
+
+// Create KR log
+router.post('/key-results/:id/logs', (req, res) => {
+  const { content } = req.body;
+  if (!content || !String(content).trim()) {
+    return res.status(400).json({ error: '内容不能为空' });
+  }
+  const result = db.prepare(
+    `INSERT INTO okr_kr_logs (kr_id, content) VALUES (?, ?)`
+  ).run(req.params.id, String(content).trim());
+  const log = db.prepare(`SELECT * FROM okr_kr_logs WHERE id = ?`).get(result.lastInsertRowid);
+  res.json(log);
+});
+
+// Delete KR log
+router.delete('/kr-logs/:id', (req, res) => {
+  db.prepare(`DELETE FROM okr_kr_logs WHERE id = ?`).run(req.params.id);
+  res.json({ success: true });
+});
+
 function getCurrentQuarter(): string {
   const now = new Date();
   const q = Math.ceil((now.getMonth() + 1) / 3);
