@@ -4,12 +4,15 @@ export function useApi<T>(url: string) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refetch = useCallback(() => {
+  const refetch = useCallback(async () => {
     setLoading(true);
-    fetch(url)
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+    try {
+      const r = await fetch(url);
+      const d = await r.json();
+      setData(d);
+    } finally {
+      setLoading(false);
+    }
   }, [url]);
 
   useEffect(() => { refetch(); }, [refetch]);

@@ -10,6 +10,15 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS okr_projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quarter TEXT NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT DEFAULT '#6366f1',
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS okr_objectives (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     quarter TEXT NOT NULL,
@@ -53,5 +62,10 @@ db.exec(`
     sort_order INTEGER DEFAULT 0
   );
 `);
+
+const objectiveCols = db.prepare("PRAGMA table_info(okr_objectives)").all() as { name: string }[];
+if (!objectiveCols.find(c => c.name === 'project_id')) {
+  db.exec(`ALTER TABLE okr_objectives ADD COLUMN project_id INTEGER REFERENCES okr_projects(id) ON DELETE SET NULL`);
+}
 
 export default db;

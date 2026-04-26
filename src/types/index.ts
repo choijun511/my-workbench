@@ -11,12 +11,22 @@ export interface KeyResult {
 export interface Objective {
   id: number;
   quarter: string;
+  project_id: number | null;
   title: string;
   progress: number;
   status: string;
   key_results: KeyResult[];
   created_at: string;
   updated_at: string;
+}
+
+export interface OKRProject {
+  id: number;
+  quarter: string;
+  name: string;
+  color: string;
+  sort_order: number;
+  created_at: string;
 }
 
 export interface Todo {

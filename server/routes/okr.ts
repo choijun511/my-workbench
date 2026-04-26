@@ -3,12 +3,91 @@ import db from '../db.js';
 
 const router = Router();
 
-// Get all objectives for a quarter
+function ensureDefaultProject(quarter: string): number {
+  const existing = db.prepare(
+    `SELECT id FROM okr_projects WHERE quarter = ? ORDER BY sort_order, id LIMIT 1`
+  ).get(quarter) as { id: number } | undefined;
+  if (existing) return existing.id;
+  const result = db.prepare(
+    `INSERT INTO okr_projects (quarter, name, color, sort_order) VALUES (?, '通用', '#64748b', 0)`
+  ).run(quarter);
+  const projectId = Number(result.lastInsertRowid);
+  // Adopt orphan objectives for this quarter
+  db.prepare(`UPDATE okr_objectives SET project_id = ? WHERE quarter = ? AND project_id IS NULL`)
+    .run(projectId, quarter);
+  return projectId;
+}
+
+// List projects for a quarter
+router.get('/projects', (req, res) => {
+  const quarter = (req.query.quarter as string) || getCurrentQuarter();
+  ensureDefaultProject(quarter);
+  const projects = db.prepare(
+    `SELECT * FROM okr_projects WHERE quarter = ? ORDER BY sort_order, id`
+  ).all(quarter);
+  res.json(projects);
+});
+
+// Create project
+router.post('/projects', (req, res) => {
+  const { quarter, name, color } = req.body;
+  const q = quarter || getCurrentQuarter();
+  ensureDefaultProject(q);
+  const maxOrder = db.prepare(
+    `SELECT COALESCE(MAX(sort_order), 0) AS m FROM okr_projects WHERE quarter = ?`
+  ).get(q) as { m: number };
+  const result = db.prepare(
+    `INSERT INTO okr_projects (quarter, name, color, sort_order) VALUES (?, ?, ?, ?)`
+  ).run(q, name, color || '#6366f1', maxOrder.m + 1);
+  const project = db.prepare('SELECT * FROM okr_projects WHERE id = ?').get(result.lastInsertRowid);
+  res.json(project);
+});
+
+// Update project
+router.put('/projects/:id', (req, res) => {
+  const { name, color } = req.body;
+  db.prepare(
+    `UPDATE okr_projects SET name = COALESCE(?, name), color = COALESCE(?, color) WHERE id = ?`
+  ).run(name, color, req.params.id);
+  res.json({ success: true });
+});
+
+// Delete project (objectives in this project are reassigned to default project for that quarter)
+router.delete('/projects/:id', (req, res) => {
+  const project = db.prepare(`SELECT * FROM okr_projects WHERE id = ?`).get(req.params.id) as
+    | { id: number; quarter: string; sort_order: number }
+    | undefined;
+  if (!project) return res.json({ success: true });
+
+  const defaultId = db.prepare(
+    `SELECT id FROM okr_projects WHERE quarter = ? AND id != ? ORDER BY sort_order, id LIMIT 1`
+  ).get(project.quarter, project.id) as { id: number } | undefined;
+
+  if (defaultId) {
+    db.prepare(`UPDATE okr_objectives SET project_id = ? WHERE project_id = ?`)
+      .run(defaultId.id, project.id);
+    db.prepare(`DELETE FROM okr_projects WHERE id = ?`).run(project.id);
+  } else {
+    // Don't allow deleting the only project; just clear its objectives' project_id stays as is
+    return res.status(400).json({ error: '不能删除该季度唯一的项目' });
+  }
+  res.json({ success: true });
+});
+
+// Get all objectives for a quarter (optionally filter by project)
 router.get('/objectives', (req, res) => {
   const quarter = (req.query.quarter as string) || getCurrentQuarter();
-  const objectives = db.prepare(`
-    SELECT * FROM okr_objectives WHERE quarter = ? ORDER BY created_at DESC
-  `).all(quarter);
+  const projectId = req.query.project_id ? Number(req.query.project_id) : null;
+
+  ensureDefaultProject(quarter);
+
+  const objectives = projectId
+    ? db.prepare(
+        `SELECT * FROM okr_objectives WHERE quarter = ? AND project_id = ? ORDER BY created_at DESC`
+      ).all(quarter, projectId)
+    : db.prepare(
+        `SELECT * FROM okr_objectives WHERE quarter = ? ORDER BY created_at DESC`
+      ).all(quarter);
 
   const objectivesWithKRs = (objectives as any[]).map((obj) => {
     const keyResults = db.prepare(`
@@ -25,20 +104,23 @@ router.get('/objectives', (req, res) => {
 
 // Create objective
 router.post('/objectives', (req, res) => {
-  const { quarter, title } = req.body;
+  const { quarter, title, project_id } = req.body;
+  const q = quarter || getCurrentQuarter();
+  const pid = project_id || ensureDefaultProject(q);
   const result = db.prepare(`
-    INSERT INTO okr_objectives (quarter, title) VALUES (?, ?)
-  `).run(quarter || getCurrentQuarter(), title);
+    INSERT INTO okr_objectives (quarter, title, project_id) VALUES (?, ?, ?)
+  `).run(q, title, pid);
   const objective = db.prepare('SELECT * FROM okr_objectives WHERE id = ?').get(result.lastInsertRowid);
   res.json({ ...objective, key_results: [] });
 });
 
 // Update objective
 router.put('/objectives/:id', (req, res) => {
-  const { title, status } = req.body;
+  const { title, status, project_id } = req.body;
   db.prepare(`
-    UPDATE okr_objectives SET title = COALESCE(?, title), status = COALESCE(?, status), updated_at = datetime('now') WHERE id = ?
-  `).run(title, status, req.params.id);
+    UPDATE okr_objectives SET title = COALESCE(?, title), status = COALESCE(?, status),
+      project_id = COALESCE(?, project_id), updated_at = datetime('now') WHERE id = ?
+  `).run(title, status, project_id, req.params.id);
   res.json({ success: true });
 });
 
