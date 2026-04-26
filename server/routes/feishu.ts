@@ -5,6 +5,11 @@ import { envReady } from '../env.js';
 
 const router = Router();
 
+router.use((req, _res, next) => {
+  console.log(`[feishu] ${req.method} ${req.path} ua=${req.headers['user-agent'] || ''}`);
+  next();
+});
+
 router.get('/status', (_req, res) => {
   const ready = envReady();
   const last = getLastSync();
@@ -35,6 +40,8 @@ const insertMessage = db.prepare(`
 // Handles URL verification challenge and im.message.receive_v1 events.
 router.post('/events', (req, res) => {
   const body = req.body || {};
+  const bodyType = body.type || body.header?.event_type || 'unknown';
+  console.log(`[feishu/events] body.type=${bodyType} keys=${Object.keys(body).join(',')}`);
 
   // URL verification challenge (sent once when configuring the webhook URL)
   if (body.type === 'url_verification' && body.challenge) {
