@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "My Workbench Capture",
+  "version": "1.0.0",
+  "description": "Capture the active tab so my-workbench can auto-generate AI insights for embedded dashboards.",
+  "permissions": ["tabs"],
+  "host_permissions": [
+    "https://my-workbench.onrender.com/*",
+    "http://localhost:5173/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://my-workbench.onrender.com/*",
+        "http://localhost:5173/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

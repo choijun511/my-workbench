@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApi, apiPost, apiDelete } from '../hooks/useApi';
+import { useExtensionCapture } from '../hooks/useExtensionCapture';
 import type { FengshenPanel, PanelInsight, PanelInsightResult } from '../types';
 import {
   Plus,
@@ -15,6 +16,7 @@ import {
   ChevronUp,
   Clipboard,
   Upload,
+  Zap,
 } from 'lucide-react';
 
 export default function FengshenPage() {
@@ -230,7 +232,10 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [textBuffer, setTextBuffer] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
+  const [autoTriedFor, setAutoTriedFor] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const ext = useExtensionCapture();
 
   const latest = insights?.[0];
   const latestResult: PanelInsightResult | null = useMemo(() => {
@@ -330,6 +335,24 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
     refetch();
   };
 
+  const captureViaExtension = async () => {
+    if (!ext.available) return;
+    setGenerating(true);
+    setErrorMsg(null);
+    try {
+      // Wait for the iframe to render before capturing.
+      await new Promise(r => setTimeout(r, 1500));
+      const r = await ext.capture();
+      if (!r) {
+        setErrorMsg(ext.lastError || '截图失败');
+        return;
+      }
+      await sendInsight({ image_base64: r.image_base64, image_mime: r.image_mime });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   // Reset text-input expander when panel changes
   useEffect(() => {
     setShowTextInput(false);
@@ -337,9 +360,24 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
     setErrorMsg(null);
   }, [panel.id]);
 
+  // Auto-capture once per panel per session, when extension is available and
+  // there's no insight for today yet.
+  useEffect(() => {
+    if (!ext.available) return;
+    if (insights === null) return; // wait for fetch
+    if (autoTriedFor === panel.id) return;
+    if (hasTodayInsight) {
+      setAutoTriedFor(panel.id);
+      return;
+    }
+    setAutoTriedFor(panel.id);
+    captureViaExtension();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ext.available, insights, panel.id, hasTodayInsight]);
+
   return (
     <div className="bg-gradient-to-br from-indigo-50 via-white to-purple-50/40 rounded-xl border border-indigo-100">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-indigo-100/70">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-indigo-100/70 gap-2 flex-wrap">
         <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
           <Sparkles size={16} className="text-indigo-500" />
           AI Insight
@@ -348,12 +386,28 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
               {hasTodayInsight ? '今日已生成' : `上次 ${formatTime(latest.created_at)}`}
             </span>
           )}
+          {ext.available && (
+            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 flex items-center gap-1">
+              <Zap size={10} /> 扩展已连接
+            </span>
+          )}
         </div>
-        {generating && (
-          <span className="text-xs text-indigo-600 flex items-center gap-1">
-            <RefreshCw size={12} className="animate-spin" /> 分析中...
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {generating && (
+            <span className="text-xs text-indigo-600 flex items-center gap-1">
+              <RefreshCw size={12} className="animate-spin" /> 分析中...
+            </span>
+          )}
+          {ext.available && !generating && (
+            <button
+              onClick={captureViaExtension}
+              className="text-xs px-2.5 py-1 rounded-md border border-indigo-200 bg-white text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"
+              title="重新截图分析当前看板"
+            >
+              <RefreshCw size={11} /> 重新截图
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-4 space-y-3">
@@ -474,7 +528,9 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
           </div>
         ) : (
           <p className="text-xs text-slate-400 pt-1">
-            截一张看板的图（{navigator.platform.includes('Mac') ? 'Cmd+Shift+4' : 'Win+Shift+S'}），回到这里按 ⌘V 粘贴即可。
+            {ext.available
+              ? '已自动开始截图分析当前看板...'
+              : <>截一张看板的图（{navigator.platform.includes('Mac') ? 'Cmd+Shift+4' : 'Win+Shift+S'}），回到这里按 ⌘V 粘贴即可。装上 <a className="text-indigo-500 hover:underline" href="https://github.com/choijun511/my-workbench/tree/main/extension" target="_blank" rel="noreferrer">Chrome 扩展</a> 之后能自动截图。</>}
           </p>
         )}
 
