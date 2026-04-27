@@ -146,13 +146,7 @@ export async function analyzePanelData(input: PanelAnalysisInput): Promise<Panel
     },
   };
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(`Gemini error: ${data?.error?.message || res.statusText}`);
+  const data = await callWithRetry(url, body);
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   const parsed = JSON.parse(text);
   return {
@@ -161,4 +155,29 @@ export async function analyzePanelData(input: PanelAnalysisInput): Promise<Panel
     insights: parsed.insights || [],
     generated_at: new Date().toISOString(),
   };
+}
+
+async function callWithRetry(url: string, body: any): Promise<any> {
+  const delays = [0, 1500, 4000, 9000]; // 4 attempts; total wait ~14.5s on full backoff
+  let lastErr: Error | null = null;
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) return data;
+
+    const msg: string = data?.error?.message || res.statusText || '';
+    const transient =
+      res.status === 429 ||
+      res.status === 503 ||
+      res.status === 500 ||
+      /high demand|overloaded|temporar|UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(msg);
+    lastErr = new Error(`Gemini error: ${msg}`);
+    if (!transient) throw lastErr;
+  }
+  throw lastErr || new Error('Gemini error: unknown');
 }
