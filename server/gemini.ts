@@ -149,11 +149,32 @@ export async function analyzePanelData(input: PanelAnalysisInput): Promise<Panel
   };
 }
 
+function parseRetryDelaySec(data: any, msg: string): number | null {
+  const details = data?.error?.details || [];
+  for (const d of details) {
+    const v = d?.retryDelay;
+    if (typeof v === 'string') {
+      const m = v.match(/^(\d+(?:\.\d+)?)s$/);
+      if (m) return Number(m[1]);
+    }
+  }
+  const m = msg.match(/retry in (\d+(?:\.\d+)?)\s*s/i);
+  return m ? Number(m[1]) : null;
+}
+
 async function callWithRetry(url: string, body: any): Promise<any> {
-  const delays = [0, 1500, 4000, 9000]; // 4 attempts; total wait ~14.5s on full backoff
+  const MAX_ATTEMPTS = 5;
+  const MAX_TOTAL_WAIT_MS = 60_000;
+  const baseDelays = [0, 1500, 4000, 9000, 18000];
   let lastErr: Error | null = null;
-  for (let i = 0; i < delays.length; i++) {
-    if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
+  let totalWaited = 0;
+
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    const wait = baseDelays[i] ?? 0;
+    if (wait > 0) {
+      await new Promise(r => setTimeout(r, wait));
+      totalWaited += wait;
+    }
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -167,9 +188,16 @@ async function callWithRetry(url: string, body: any): Promise<any> {
       res.status === 429 ||
       res.status === 503 ||
       res.status === 500 ||
-      /high demand|overloaded|temporar|UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(msg);
+      /high demand|overloaded|temporar|UNAVAILABLE|RESOURCE_EXHAUSTED|quota/i.test(msg);
     lastErr = new Error(`Gemini error: ${msg}`);
     if (!transient) throw lastErr;
+
+    // Honor server's retryDelay hint when present.
+    const hintSec = parseRetryDelaySec(data, msg);
+    if (hintSec != null && i < MAX_ATTEMPTS - 1) {
+      const hintMs = Math.ceil(hintSec * 1000) + 500; // small buffer
+      baseDelays[i + 1] = Math.max(baseDelays[i + 1] ?? 0, Math.min(hintMs, MAX_TOTAL_WAIT_MS - totalWaited));
+    }
   }
   throw lastErr || new Error('Gemini error: unknown');
 }
