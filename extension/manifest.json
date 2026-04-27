@@ -3,7 +3,7 @@
   "name": "My Workbench Capture",
   "version": "1.0.0",
   "description": "Capture the active tab so my-workbench can auto-generate AI insights for embedded dashboards.",
-  "permissions": ["tabs"],
+  "permissions": ["tabs", "debugger"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"

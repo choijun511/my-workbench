@@ -22,8 +22,12 @@ When the extension is updated (e.g. after `git pull`), click the reload icon on 
 
 ## Permissions explained
 
-- `tabs` + `host_permissions: ["<all_urls>"]`: Chrome's `captureVisibleTab` requires either `<all_urls>` or `activeTab` — even per-origin host_permissions are refused. We use `<all_urls>` so capture can fire automatically when you click a panel without you also having to click the extension icon. In practice the extension only ever captures while you are on my-workbench because the content script (the only thing that asks for captures) is restricted to `my-workbench.onrender.com` / `localhost:5173`.
-- No analytics, no storage, no remote calls of its own.
+- `tabs` + `host_permissions: ["<all_urls>"]`: Chrome's `captureVisibleTab` requires either `<all_urls>` or `activeTab` — even per-origin host_permissions are refused.
+- `debugger`: needed for `Page.captureScreenshot` with `captureBeyondViewport:true`, which grabs the full document height (not just the visible viewport). While the extension is capturing, Chrome shows a yellow "扩展正在调试此浏览器" banner; it disappears as soon as the screenshot returns (a few hundred ms). The extension detaches the debugger after every capture.
+
+In practice the extension only ever captures while you are on my-workbench because the content script (the only thing that asks for captures) is restricted to `my-workbench.onrender.com` / `localhost:5173`.
+
+No analytics, no storage, no remote calls of its own.
 
 ## Files
 
