@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApi, apiPost, apiDelete } from '../hooks/useApi';
-import { useDisplayCapture } from '../hooks/useDisplayCapture';
 import type { FengshenPanel, PanelInsight, PanelInsightResult } from '../types';
 import {
   Plus,
@@ -14,7 +13,8 @@ import {
   Lightbulb,
   ChevronDown,
   ChevronUp,
-  ScreenShare,
+  Clipboard,
+  Upload,
 } from 'lucide-react';
 
 export default function FengshenPage() {
@@ -26,8 +26,6 @@ export default function FengshenPage() {
   const [newDesc, setNewDesc] = useState('');
   const [dragId, setDragId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
-
-  const capture = useDisplayCapture();
 
   const addPanel = async () => {
     if (!newName.trim() || !newUrl.trim()) return;
@@ -67,15 +65,12 @@ export default function FengshenPage() {
           <h1 className="text-2xl font-bold text-slate-800">风神看板</h1>
           <p className="text-sm text-slate-500 mt-1">嵌入风神系统的关键指标和看板</p>
         </div>
-        <div className="flex items-center gap-2">
-          <ScreenShareToggle capture={capture} />
-          <button
-            onClick={() => setShowAdd(!showAdd)}
-            className="px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 flex items-center gap-1.5"
-          >
-            <Plus size={16} /> 添加看板
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAdd(!showAdd)}
+          className="px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 flex items-center gap-1.5"
+        >
+          <Plus size={16} /> 添加看板
+        </button>
       </div>
 
       {showAdd && (
@@ -109,7 +104,6 @@ export default function FengshenPage() {
       )}
 
       <div className="flex gap-6">
-        {/* Panel list with drag-and-drop */}
         <div className="w-64 flex-shrink-0 space-y-2">
           {!panels?.length ? (
             <div className="text-center py-8 text-slate-400">
@@ -190,11 +184,10 @@ export default function FengshenPage() {
           )}
         </div>
 
-        {/* Right side: AI Insight + iframe */}
         <div className="flex-1 min-w-0">
           {selected ? (
             <div className="space-y-4">
-              <PanelInsightCard panel={selected} capture={capture} />
+              <PanelInsightCard panel={selected} />
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-[600px] 2xl:min-h-[700px]">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                   <span className="text-sm font-medium text-slate-700">{selected.name}</span>
@@ -229,42 +222,15 @@ export default function FengshenPage() {
   );
 }
 
-function ScreenShareToggle({ capture }: { capture: ReturnType<typeof useDisplayCapture> }) {
-  if (capture.active) {
-    return (
-      <button
-        onClick={capture.stop}
-        className="px-3 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm flex items-center gap-1.5 hover:bg-emerald-100"
-        title="停止屏幕共享"
-      >
-        <ScreenShare size={16} /> 共享中
-      </button>
-    );
-  }
-  return (
-    <button
-      onClick={capture.start}
-      disabled={capture.starting}
-      className="px-3 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm flex items-center gap-1.5 hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-50"
-      title="开启屏幕共享后可自动截图生成洞察"
-    >
-      <ScreenShare size={16} /> {capture.starting ? '请求中...' : '开启自动洞察'}
-    </button>
-  );
-}
-
-function PanelInsightCard({
-  panel,
-  capture,
-}: {
-  panel: FengshenPanel;
-  capture: ReturnType<typeof useDisplayCapture>;
-}) {
+function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
   const { data: insights, refetch } = useApi<PanelInsight[]>(`/api/fengshen/${panel.id}/insights`);
   const [generating, setGenerating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [autoTriedFor, setAutoTriedFor] = useState<number | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [textBuffer, setTextBuffer] = useState('');
+  const [showTextInput, setShowTextInput] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const latest = insights?.[0];
   const latestResult: PanelInsightResult | null = useMemo(() => {
@@ -282,57 +248,94 @@ function PanelInsightCard({
   };
   const hasTodayInsight = isToday(latest?.created_at);
 
-  const generate = async () => {
-    if (!capture.active) {
-      setErrorMsg('请先在右上角开启屏幕共享');
-      return;
-    }
+  const fileToBase64 = (file: File): Promise<{ b64: string; mime: string }> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const url = reader.result as string;
+        const comma = url.indexOf(',');
+        resolve({ b64: comma >= 0 ? url.slice(comma + 1) : '', mime: file.type || 'image/png' });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const sendInsight = async (payload: { image_base64?: string; image_mime?: string; text?: string }) => {
     setGenerating(true);
     setErrorMsg(null);
     try {
-      // Give iframe a moment to render
-      await new Promise(r => setTimeout(r, 600));
-      const b64 = await capture.captureFrameJpeg();
-      if (!b64) {
-        setErrorMsg('截图失败，请确认共享的是当前标签页');
-        return;
-      }
       const res = await fetch(`/api/fengshen/${panel.id}/insights`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_base64: b64, image_mime: 'image/jpeg' }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
         setErrorMsg(data.error || '生成失败');
-        return;
+        return false;
       }
       refetch();
+      return true;
     } catch (e) {
       setErrorMsg((e as Error).message);
+      return false;
     } finally {
       setGenerating(false);
     }
   };
 
-  // Auto-generate on panel select if capture is active and no insight exists for today
-  useEffect(() => {
-    if (!capture.active) return;
-    if (autoTriedFor === panel.id) return;
-    if (insights === null) return; // wait for fetch
-    if (hasTodayInsight) {
-      setAutoTriedFor(panel.id);
-      return;
+  const handleImageFile = async (file: File) => {
+    const { b64, mime } = await fileToBase64(file);
+    if (b64) await sendInsight({ image_base64: b64, image_mime: mime });
+  };
+
+  const onPaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items || [];
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        e.preventDefault();
+        const f = item.getAsFile();
+        if (f) await handleImageFile(f);
+        return;
+      }
     }
-    setAutoTriedFor(panel.id);
-    generate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panel.id, capture.active, insights, hasTodayInsight]);
+    // No image — fall back to text
+    const text = e.clipboardData?.getData('text/plain') || '';
+    if (text.trim()) {
+      e.preventDefault();
+      await sendInsight({ text: text.trim() });
+    }
+  };
+
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      await handleImageFile(file);
+    }
+  };
+
+  const submitText = async () => {
+    if (!textBuffer.trim()) return;
+    const ok = await sendInsight({ text: textBuffer.trim() });
+    if (ok) {
+      setTextBuffer('');
+      setShowTextInput(false);
+    }
+  };
 
   const deleteInsight = async (id: number) => {
     await apiDelete(`/api/fengshen/insights/${id}`);
     refetch();
   };
+
+  // Reset text-input expander when panel changes
+  useEffect(() => {
+    setShowTextInput(false);
+    setTextBuffer('');
+    setErrorMsg(null);
+  }, [panel.id]);
 
   return (
     <div className="bg-gradient-to-br from-indigo-50 via-white to-purple-50/40 rounded-xl border border-indigo-100">
@@ -346,40 +349,91 @@ function PanelInsightCard({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {!capture.active && (
-            <span className="text-xs text-slate-400">先点右上角"开启自动洞察"</span>
-          )}
-          <button
-            onClick={generate}
-            disabled={generating || !capture.active}
-            className="text-xs px-3 py-1.5 bg-white border border-indigo-200 text-indigo-600 rounded-md hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-          >
-            <RefreshCw size={12} className={generating ? 'animate-spin' : ''} />
-            {generating ? '分析中...' : hasTodayInsight ? '重新生成' : '生成今日洞察'}
-          </button>
-        </div>
+        {generating && (
+          <span className="text-xs text-indigo-600 flex items-center gap-1">
+            <RefreshCw size={12} className="animate-spin" /> 分析中...
+          </span>
+        )}
       </div>
 
-      <div className="p-4">
+      <div className="p-4 space-y-3">
+        {/* Paste / drop zone — always visible at top */}
+        <div
+          tabIndex={0}
+          onPaste={onPaste}
+          onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`relative px-4 py-3 rounded-lg border-2 border-dashed cursor-pointer text-center transition-colors ${
+            isDragOver
+              ? 'border-indigo-400 bg-indigo-50'
+              : 'border-indigo-200/70 bg-white/60 hover:border-indigo-300 hover:bg-white focus:border-indigo-400 focus:bg-indigo-50/70 outline-none'
+          }`}
+        >
+          <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+            <Clipboard size={14} className="text-indigo-400" />
+            <span>
+              <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] mr-1">⌘V</kbd>
+              粘贴截图
+              <span className="mx-1 text-slate-300">·</span>
+              拖拽图片
+              <span className="mx-1 text-slate-300">·</span>
+              <span className="text-indigo-500">点击上传</span>
+            </span>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async e => {
+              const f = e.target.files?.[0];
+              if (f) await handleImageFile(f);
+              e.target.value = '';
+            }}
+          />
+        </div>
+
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            onClick={() => setShowTextInput(!showTextInput)}
+            className="text-indigo-600 hover:underline"
+          >
+            {showTextInput ? '收起文字输入' : '或者粘贴文字数据'}
+          </button>
+        </div>
+
+        {showTextInput && (
+          <div className="space-y-2">
+            <textarea
+              value={textBuffer}
+              onChange={e => setTextBuffer(e.target.value)}
+              placeholder="例如：DAU 100万（昨日 120万），新增 5000，留存率 35%..."
+              rows={4}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            />
+            <button
+              onClick={submitText}
+              disabled={!textBuffer.trim() || generating}
+              className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1"
+            >
+              <Upload size={12} /> 分析这段文字
+            </button>
+          </div>
+        )}
+
         {errorMsg && (
-          <div className="mb-3 px-3 py-2 text-xs bg-red-50 border border-red-200 text-red-600 rounded">
+          <div className="px-3 py-2 text-xs bg-red-50 border border-red-200 text-red-600 rounded">
             {errorMsg}
           </div>
         )}
 
-        {!latestResult ? (
-          <p className="text-sm text-slate-400 py-2">
-            {capture.active
-              ? '尚无洞察。点右上角"生成今日洞察"开始。'
-              : '开启屏幕共享后，进入看板会自动截图分析。'}
-          </p>
-        ) : (
-          <div className="space-y-3">
+        {latestResult ? (
+          <div className="pt-2 space-y-3">
             {latestResult.summary && (
               <p className="text-sm text-slate-700 leading-relaxed">{latestResult.summary}</p>
             )}
-
             {latestResult.anomalies?.length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
@@ -405,7 +459,6 @@ function PanelInsightCard({
                 </ul>
               </div>
             )}
-
             {latestResult.insights?.length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
@@ -419,10 +472,14 @@ function PanelInsightCard({
               </div>
             )}
           </div>
+        ) : (
+          <p className="text-xs text-slate-400 pt-1">
+            截一张看板的图（{navigator.platform.includes('Mac') ? 'Cmd+Shift+4' : 'Win+Shift+S'}），回到这里按 ⌘V 粘贴即可。
+          </p>
         )}
 
         {insights && insights.length > 1 && (
-          <div className="mt-4 pt-3 border-t border-indigo-100/70">
+          <div className="pt-3 border-t border-indigo-100/70">
             <button
               onClick={() => setShowHistory(!showHistory)}
               className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"

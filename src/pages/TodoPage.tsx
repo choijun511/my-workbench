@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi';
 import type { Todo, FeishuStatus, FeishuSyncResult } from '../types';
-import { Plus, Trash2, Check, Circle, Clock, Filter, Inbox, ArrowRight, Lightbulb, RefreshCw, ExternalLink, MessageCircle } from 'lucide-react';
+import { Plus, Trash2, Check, Circle, Clock, Filter, Inbox, ArrowRight, Lightbulb, RefreshCw, ExternalLink, MessageCircle, Edit3, X } from 'lucide-react';
 
 const priorityConfig = {
   P0: { label: 'P0 紧急', color: 'bg-red-100 text-red-600 border-red-200' },
@@ -83,6 +83,11 @@ export default function TodoPage() {
 
   const updateStatus = async (id: number, status: string) => {
     await apiPut(`/api/todos/${id}`, { status });
+    refetch();
+  };
+
+  const updateTodo = async (id: number, patch: Partial<Todo>) => {
+    await apiPut(`/api/todos/${id}`, patch);
     refetch();
   };
 
@@ -253,6 +258,7 @@ export default function TodoPage() {
                 key={todo.id}
                 todo={todo}
                 onStatusChange={updateStatus}
+                onUpdate={updateTodo}
                 onDelete={deleteTodo}
               />
             )
@@ -320,14 +326,92 @@ function DraftRow({
 function TodoRow({
   todo,
   onStatusChange,
+  onUpdate,
   onDelete,
 }: {
   todo: Todo;
   onStatusChange: (id: number, status: string) => void;
+  onUpdate: (id: number, patch: Partial<Todo>) => void;
   onDelete: (id: number) => void;
 }) {
   const StatusIcon = statusConfig[todo.status].icon;
   const nextStatus = todo.status === 'todo' ? 'in_progress' : todo.status === 'in_progress' ? 'done' : 'todo';
+
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(todo.title);
+  const [draftPriority, setDraftPriority] = useState(todo.priority);
+  const [draftUrgency, setDraftUrgency] = useState(todo.urgency);
+
+  const startEdit = () => {
+    setDraftTitle(todo.title);
+    setDraftPriority(todo.priority);
+    setDraftUrgency(todo.urgency);
+    setEditing(true);
+  };
+
+  const save = () => {
+    const patch: Partial<Todo> = {};
+    if (draftTitle.trim() && draftTitle !== todo.title) patch.title = draftTitle.trim();
+    if (draftPriority !== todo.priority) patch.priority = draftPriority;
+    if (draftUrgency !== todo.urgency) patch.urgency = draftUrgency;
+    if (Object.keys(patch).length > 0) onUpdate(todo.id, patch);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="bg-white rounded-xl border border-indigo-200 ring-2 ring-indigo-100 px-5 py-4 space-y-3">
+        <input
+          autoFocus
+          value={draftTitle}
+          onChange={e => setDraftTitle(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); }
+            if (e.key === 'Escape') setEditing(false);
+          }}
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">优先级:</span>
+            {(['P0','P1','P2','P3'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => setDraftPriority(p)}
+                className={`text-xs px-2 py-1 rounded border ${
+                  draftPriority === p ? priorityConfig[p].color : 'border-slate-200 text-slate-400'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">紧急:</span>
+            {(['urgent','normal','low'] as const).map(u => (
+              <button
+                key={u}
+                onClick={() => setDraftUrgency(u)}
+                className={`text-xs px-2 py-1 rounded border ${
+                  draftUrgency === u ? 'border-indigo-300 text-indigo-600 bg-indigo-50' : 'border-slate-200 text-slate-400'
+                }`}
+              >
+                {urgencyConfig[u].label}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex items-center gap-1">
+            <button onClick={save} className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center gap-1">
+              <Check size={12} /> 保存
+            </button>
+            <button onClick={() => setEditing(false)} className="px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
+              <X size={12} /> 取消
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex items-center gap-3 bg-white rounded-xl border border-slate-200 px-5 py-4 group hover:border-slate-300 transition-colors ${
@@ -342,7 +426,7 @@ function TodoRow({
         <StatusIcon size={20} />
       </button>
       <div className="flex-1 min-w-0">
-        <span className={`text-sm ${todo.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+        <span className={`text-sm break-words ${todo.status === 'done' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
           {todo.title}
         </span>
         {todo.due_date && (
@@ -355,6 +439,13 @@ function TodoRow({
       <span className={`text-xs ${urgencyConfig[todo.urgency].color}`}>
         {urgencyConfig[todo.urgency].label}
       </span>
+      <button
+        onClick={startEdit}
+        className="text-slate-300 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"
+        title="编辑"
+      >
+        <Edit3 size={14} />
+      </button>
       <button
         onClick={() => onDelete(todo.id)}
         className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
