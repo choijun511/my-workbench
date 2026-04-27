@@ -22,8 +22,8 @@ When the extension is updated (e.g. after `git pull`), click the reload icon on 
 
 ## Permissions explained
 
-- `tabs` + `host_permissions` for `my-workbench.onrender.com` and `localhost:5173`: needed to call `captureVisibleTab` for those origins.
-- No `<all_urls>`, no analytics, no storage. The extension can only act when you're on my-workbench.
+- `tabs` + `host_permissions: ["<all_urls>"]`: Chrome's `captureVisibleTab` requires either `<all_urls>` or `activeTab` — even per-origin host_permissions are refused. We use `<all_urls>` so capture can fire automatically when you click a panel without you also having to click the extension icon. In practice the extension only ever captures while you are on my-workbench because the content script (the only thing that asks for captures) is restricted to `my-workbench.onrender.com` / `localhost:5173`.
+- No analytics, no storage, no remote calls of its own.
 
 ## Files
 
