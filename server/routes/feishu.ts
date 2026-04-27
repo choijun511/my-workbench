@@ -15,12 +15,16 @@ router.get('/status', (_req, res) => {
   const ready = envReady();
   const last = getLastSync();
   const stats = getMessageStats();
+  const key = process.env.GEMINI_API_KEY || '';
   res.json({
     configured: ready.ok,
     missing: ready.missing,
     last_sync_at: last.at,
     last_sync_result: last.value ? JSON.parse(last.value) : null,
     messages: stats,
+    gemini_key: key
+      ? { length: key.length, suffix: key.slice(-6), model: process.env.GEMINI_MODEL || '' }
+      : null,
   });
 });
 
