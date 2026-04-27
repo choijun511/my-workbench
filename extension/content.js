@@ -5,11 +5,27 @@
 
 const VERSION = '1.0.0';
 
-function announce() {
-  window.postMessage({ source: 'mwb-extension', type: 'ready', version: VERSION }, '*');
+function isContextValid() {
+  // chrome.runtime.id is undefined after the extension is reloaded/uninstalled
+  // while an old content script is still in the page.
+  try {
+    return !!(chrome && chrome.runtime && chrome.runtime.id);
+  } catch (_) {
+    return false;
+  }
 }
 
-// Announce on load and on bfcache restore.
+function postToPage(payload) {
+  try {
+    window.postMessage(payload, '*');
+  } catch (_) {}
+}
+
+function announce() {
+  if (!isContextValid()) return;
+  postToPage({ source: 'mwb-extension', type: 'ready', version: VERSION });
+}
+
 announce();
 window.addEventListener('pageshow', announce);
 
@@ -19,33 +35,44 @@ window.addEventListener('message', (e) => {
   if (!msg || msg.target !== 'mwb-extension') return;
 
   if (msg.type === 'ping') {
-    window.postMessage(
-      { source: 'mwb-extension', type: 'pong', requestId: msg.requestId, version: VERSION },
-      '*'
-    );
+    postToPage({ source: 'mwb-extension', type: 'pong', requestId: msg.requestId, version: VERSION });
     return;
   }
 
   if (msg.type === 'capture') {
-    chrome.runtime.sendMessage({ type: 'capture' }, (response) => {
-      const err = chrome.runtime.lastError;
-      if (err || !response) {
-        window.postMessage(
-          {
+    if (!isContextValid()) {
+      postToPage({
+        source: 'mwb-extension',
+        type: 'capture-result',
+        requestId: msg.requestId,
+        ok: false,
+        error: '扩展已更新，请刷新页面',
+      });
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage({ type: 'capture' }, (response) => {
+        const err = chrome.runtime.lastError;
+        if (err || !response) {
+          postToPage({
             source: 'mwb-extension',
             type: 'capture-result',
             requestId: msg.requestId,
             ok: false,
             error: (err && err.message) || 'no response',
-          },
-          '*'
-        );
-        return;
-      }
-      window.postMessage(
-        { source: 'mwb-extension', type: 'capture-result', requestId: msg.requestId, ...response },
-        '*'
-      );
-    });
+          });
+          return;
+        }
+        postToPage({ source: 'mwb-extension', type: 'capture-result', requestId: msg.requestId, ...response });
+      });
+    } catch (e) {
+      postToPage({
+        source: 'mwb-extension',
+        type: 'capture-result',
+        requestId: msg.requestId,
+        ok: false,
+        error: e && e.message ? e.message : '扩展上下文已失效，请刷新页面',
+      });
+    }
   }
 });
