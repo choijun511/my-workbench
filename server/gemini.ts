@@ -54,15 +54,7 @@ export async function extractTodosFromMessages(
     },
   };
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(`Gemini error: ${data?.error?.message || res.statusText}`);
-  }
+  const data = await callWithRetry(url, body);
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   if (!text) return [];
   try {
