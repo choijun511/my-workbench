@@ -76,6 +76,12 @@ if (!objectiveCols.find(c => c.name === 'project_id')) {
   db.exec(`ALTER TABLE okr_objectives ADD COLUMN project_id INTEGER REFERENCES okr_projects(id) ON DELETE SET NULL`);
 }
 
+const decisionCols = db.prepare("PRAGMA table_info(decisions)").all() as { name: string }[];
+const decisionColNames = new Set(decisionCols.map(c => c.name));
+if (decisionCols.length && !decisionColNames.has('last_reminded_at')) {
+  db.exec(`ALTER TABLE decisions ADD COLUMN last_reminded_at TEXT`);
+}
+
 const todoCols = db.prepare("PRAGMA table_info(todos)").all() as { name: string }[];
 const todoColNames = new Set(todoCols.map(c => c.name));
 for (const [col, type] of [['source', 'TEXT'], ['source_ref', 'TEXT'], ['source_url', 'TEXT']]) {
@@ -143,6 +149,7 @@ db.exec(`
     embedding TEXT,                         -- JSON [float], lazy-computed
     reflection_log TEXT DEFAULT '[]',       -- JSON [{at, status, note}]
     next_review_at TEXT,                    -- when to nudge for verify follow-up
+    last_reminded_at TEXT,                  -- last time the user got a Feishu reminder
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );

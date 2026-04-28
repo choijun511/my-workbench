@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { extractDecision, embedText, classifyRelationship } from '../gemini.js';
+import { runDecisionReviewCheck } from '../decisionReview.js';
 
 const router = Router();
 
@@ -345,6 +346,24 @@ router.get('/review/due', (_req, res) => {
     `SELECT * FROM decisions WHERE status = 'active' AND next_review_at IS NOT NULL AND next_review_at <= datetime('now') ORDER BY next_review_at ASC`
   ).all() as any[];
   res.json(rows.map(rowToDecision));
+});
+
+// Manually trigger the daily review check (also runs at midnight via cron)
+router.post('/review/run', async (_req, res) => {
+  const result = await runDecisionReviewCheck();
+  if (!result.ok) return res.status(500).json(result);
+  res.json(result);
+});
+
+// Last review run status
+router.get('/review/status', (_req, res) => {
+  const row = db.prepare(`SELECT value, updated_at FROM sync_state WHERE key = 'decision_review_last_run'`).get() as any;
+  if (!row) return res.json({ ran_at: null, last: null });
+  try {
+    res.json({ ran_at: row.updated_at, last: JSON.parse(row.value) });
+  } catch {
+    res.json({ ran_at: row.updated_at, last: null });
+  }
 });
 
 export default router;
