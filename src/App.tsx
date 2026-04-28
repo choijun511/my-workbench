@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import OKRPage from './pages/OKRPage';
 import TodoPage from './pages/TodoPage';
 import FengshenPage from './pages/FengshenPage';
+import DecisionsPage from './pages/DecisionsPage';
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="/okr" element={<OKRPage />} />
           <Route path="/todo" element={<TodoPage />} />
           <Route path="/fengshen" element={<FengshenPage />} />
+          <Route path="/decisions" element={<DecisionsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

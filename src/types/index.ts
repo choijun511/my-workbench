@@ -97,3 +97,46 @@ export interface PanelInsight {
   result: string; // JSON-stringified PanelInsightResult
   created_at: string;
 }
+
+export interface DecisionAlternative {
+  name: string;
+  why_not: string;
+}
+export interface DecisionVerify {
+  method: string;
+  after_days: number;
+}
+export interface DecisionReflection {
+  at: string;
+  status: 'holds' | 'wrong' | 'pivoted' | 'still_thinking';
+  note: string;
+}
+export type DecisionStatus = 'draft' | 'active' | 'superseded' | 'reverted' | 'obsolete';
+
+export interface Decision {
+  id: number;
+  title: string;
+  decision: string;
+  context: string;
+  alternatives: DecisionAlternative[];
+  assumptions: string[];
+  verify: DecisionVerify | null;
+  status: DecisionStatus;
+  confidence: number | null;
+  tags: string[];
+  supersedes_id: number | null;
+  source_tool: string | null;
+  source_url: string | null;
+  source_captured_at: string | null;
+  raw_excerpt: string;
+  reflection_log: DecisionReflection[];
+  next_review_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DecisionRelated {
+  id: number;
+  title: string;
+  score: number;
+}

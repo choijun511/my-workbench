@@ -123,6 +123,32 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_panel_insights_panel ON panel_insights(panel_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS decisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    decision TEXT NOT NULL DEFAULT '',
+    context TEXT DEFAULT '',
+    alternatives TEXT DEFAULT '[]',         -- JSON [{name, why_not}]
+    assumptions TEXT DEFAULT '[]',          -- JSON [string]
+    verify TEXT DEFAULT '',                 -- JSON {method, after_days} or empty
+    status TEXT DEFAULT 'active',           -- draft|active|superseded|reverted|obsolete
+    confidence REAL,                        -- 0-1, Gemini's extraction confidence
+    tags TEXT DEFAULT '[]',                 -- JSON [string]
+    supersedes_id INTEGER REFERENCES decisions(id) ON DELETE SET NULL,
+    source_tool TEXT,
+    source_url TEXT,
+    source_captured_at TEXT,
+    raw_excerpt TEXT DEFAULT '',
+    embedding TEXT,                         -- JSON [float], lazy-computed
+    reflection_log TEXT DEFAULT '[]',       -- JSON [{at, status, note}]
+    next_review_at TEXT,                    -- when to nudge for verify follow-up
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_decisions_status_created ON decisions(status, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_decisions_review ON decisions(next_review_at) WHERE next_review_at IS NOT NULL AND status = 'active';
 `);
 
 export default db;

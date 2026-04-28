@@ -201,3 +201,116 @@ async function callWithRetry(url: string, body: any): Promise<any> {
   }
   throw lastErr || new Error('Gemini error: unknown');
 }
+
+// === Decision capture ===
+
+export interface DecisionExtraction {
+  title: string;
+  decision: string;
+  context: string;
+  alternatives: Array<{ name: string; why_not: string }>;
+  assumptions: string[];
+  verify: { method: string; after_days: number } | null;
+  tags: string[];
+  confidence: number; // 0-1, model's confidence that the chat actually contains a decision
+  reasoning: string;  // why this confidence
+}
+
+const DECISION_PROMPT = `你是一个帮助用户从 AI 聊天记录中提取产品/工程决策的助手。用户从他和 AI 的对话中截取了一段，希望你把它结构化成一条"决策记录"。
+
+请严格按以下 schema 输出 JSON：
+
+{
+  "title": "≤30 字的决策标题（祈使句或名词短语）",
+  "decision": "1-2 句话陈述用户做了什么决定（不是 AI 建议了什么，而是用户最后选择了什么）",
+  "context": "做这个决定的背景：是什么问题、为什么现在要决定、约束条件",
+  "alternatives": [
+    { "name": "另一个考虑过的方案", "why_not": "为什么没选它" }
+  ],
+  "assumptions": ["这个决定依赖哪些可被推翻的假设（例如'用户更在意 X 而不是 Y'）"],
+  "verify": { "method": "如何判断决定对错（数据/反馈/时间窗口等可观察的信号）", "after_days": 验证窗口的天数 } 或 null,
+  // ⚠️ verify 字段重要！只要原文出现"试一周/一个月看看"、"如果 X 就 Y"、"过几天再看"等带时间窗的措辞，必须填，不要轻易给 null
+  // 时间换算：一周=7、两周=14、一个月=30、一个季度=90，没明确说就估一个合理值（默认 7）
+  "tags": ["项目/领域标签，例如 'OKR', '配色', '飞书集成'"],
+  "confidence": 0-1 之间的数字，表示这段对话**确实**包含了一个明确决策的概率,
+  "reasoning": "用 1 句话解释你为什么给这个 confidence"
+}
+
+判断 confidence 的关键：
+- 0.85+：用户明确说了"我决定/我选了/就这样定/这么干"等词，或者结尾给出了清楚的选择
+- 0.5-0.85：讨论了选项但用户没明确拍板
+- 0.5 以下：只是在咨询或 brainstorming，没有实际决定
+
+要求：
+- 不要编造 alternatives——只列出对话里**真的提到过**的方案
+- assumptions 抽不出来就给空数组，不要硬凑
+- verify 抽不出来就返回 null
+- title 必须能让用户一眼想起这条记录，避免笼统词如"做出决定"
+- 全部用中文（除非原文是英文术语，可保留）`;
+
+export async function extractDecision(rawText: string, sourceTool?: string, sourceUrl?: string): Promise<DecisionExtraction> {
+  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY 未配置');
+  const sourceHint = sourceTool || sourceUrl ? `\n\n来源：${sourceTool || ''} ${sourceUrl || ''}`.trim() : '';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`;
+  const body = {
+    contents: [{ parts: [{ text: `${DECISION_PROMPT}${sourceHint}\n\n聊天原文：\n${rawText}` }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          title: { type: 'STRING' },
+          decision: { type: 'STRING' },
+          context: { type: 'STRING' },
+          alternatives: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: { name: { type: 'STRING' }, why_not: { type: 'STRING' } },
+              required: ['name', 'why_not'],
+            },
+          },
+          assumptions: { type: 'ARRAY', items: { type: 'STRING' } },
+          verify: {
+            type: 'OBJECT',
+            properties: { method: { type: 'STRING' }, after_days: { type: 'NUMBER' } },
+            nullable: true,
+          },
+          tags: { type: 'ARRAY', items: { type: 'STRING' } },
+          confidence: { type: 'NUMBER' },
+          reasoning: { type: 'STRING' },
+        },
+        required: ['title', 'decision', 'context', 'alternatives', 'assumptions', 'tags', 'confidence', 'reasoning'],
+      },
+      temperature: 0.2,
+    },
+  };
+  const data = await callWithRetry(url, body);
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const parsed = JSON.parse(text);
+  return {
+    title: parsed.title || '未命名决策',
+    decision: parsed.decision || '',
+    context: parsed.context || '',
+    alternatives: parsed.alternatives || [],
+    assumptions: parsed.assumptions || [],
+    verify: parsed.verify || null,
+    tags: parsed.tags || [],
+    confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
+    reasoning: parsed.reasoning || '',
+  };
+}
+
+export async function embedText(text: string): Promise<number[]> {
+  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY 未配置');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${env.GEMINI_API_KEY}`;
+  const body = { content: { parts: [{ text }] } };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Gemini embed error: ${data?.error?.message || res.statusText}`);
+  return data?.embedding?.values || [];
+}

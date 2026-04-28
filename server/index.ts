@@ -7,6 +7,7 @@ import okrRoutes from './routes/okr.js';
 import todoRoutes from './routes/todo.js';
 import fengshenRoutes from './routes/fengshen.js';
 import feishuRoutes from './routes/feishu.js';
+import decisionRoutes from './routes/decisions.js';
 import { scheduleDailySync } from './cron.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,6 +22,7 @@ app.use('/api/okr', okrRoutes);
 app.use('/api/todos', todoRoutes);
 app.use('/api/fengshen', fengshenRoutes);
 app.use('/api/feishu', feishuRoutes);
+app.use('/api/decisions', decisionRoutes);
 
 // Serve static frontend in production
 const distPath = path.join(__dirname, '..', 'dist');

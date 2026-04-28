@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Target, CheckSquare, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Target, CheckSquare, BarChart3, BookOpen } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '工作台' },
   { to: '/okr', icon: Target, label: 'OKR' },
   { to: '/todo', icon: CheckSquare, label: '待办事项' },
+  { to: '/decisions', icon: BookOpen, label: '决策' },
   { to: '/fengshen', icon: BarChart3, label: '风神看板' },
 ];
 
