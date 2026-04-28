@@ -376,7 +376,7 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
   }, [ext.available, insights, panel.id, hasTodayInsight]);
 
   return (
-    <div className="bg-gradient-to-br from-gold/8 via-white to-electric/8 rounded-xl border border-gold/20">
+    <div className="bg-card rounded-xl border border-gold/30 grain card-lift">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gold/30 gap-2 flex-wrap">
         <div className="flex items-center gap-2 text-sm font-medium text-bone">
           <Sparkles size={16} className="text-electric" />
