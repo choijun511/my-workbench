@@ -64,31 +64,31 @@ export default function FengshenPage() {
     <div className="max-w-full">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">风神看板</h1>
-          <p className="text-sm text-slate-500 mt-1">嵌入风神系统的关键指标和看板</p>
+          <h1 className="text-2xl font-bold text-bone">风神看板</h1>
+          <p className="text-sm text-haze mt-1">嵌入风神系统的关键指标和看板</p>
         </div>
         <button
           onClick={() => setShowAdd(!showAdd)}
-          className="px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 flex items-center gap-1.5"
+          className="px-4 py-2.5 bg-gold text-stage-deep rounded-lg text-sm font-medium hover:bg-gold/90 flex items-center gap-1.5"
         >
           <Plus size={16} /> 添加看板
         </button>
       </div>
 
       {showAdd && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+        <div className="bg-card rounded-xl border border-velvet p-5 mb-6">
           <div className="grid grid-cols-2 gap-3 mb-3">
             <input
               value={newName}
               onChange={e => setNewName(e.target.value)}
               placeholder="看板名称"
-              className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-4 py-2.5 text-sm border border-velvet rounded-lg focus:outline-none focus:ring-2 focus:ring-gold"
             />
             <input
               value={newUrl}
               onChange={e => setNewUrl(e.target.value)}
               placeholder="风神看板 URL"
-              className="px-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-4 py-2.5 text-sm border border-velvet rounded-lg focus:outline-none focus:ring-2 focus:ring-gold"
             />
           </div>
           <div className="flex gap-3">
@@ -96,9 +96,9 @@ export default function FengshenPage() {
               value={newDesc}
               onChange={e => setNewDesc(e.target.value)}
               placeholder="描述（可选）"
-              className="flex-1 px-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 px-4 py-2.5 text-sm border border-velvet rounded-lg focus:outline-none focus:ring-2 focus:ring-gold"
             />
-            <button onClick={addPanel} className="px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+            <button onClick={addPanel} className="px-4 py-2.5 bg-gold text-stage-deep rounded-lg text-sm hover:bg-gold/90">
               保存
             </button>
           </div>
@@ -108,7 +108,7 @@ export default function FengshenPage() {
       <div className="flex gap-6">
         <div className="w-64 flex-shrink-0 space-y-2">
           {!panels?.length ? (
-            <div className="text-center py-8 text-slate-400">
+            <div className="text-center py-8 text-haze">
               <Monitor size={32} className="mx-auto mb-2 opacity-50" />
               <p className="text-sm">暂无看板</p>
               <p className="text-xs mt-1">点击上方按钮添加风神看板</p>
@@ -144,19 +144,19 @@ export default function FengshenPage() {
                   }}
                   className={`p-4 rounded-xl border cursor-pointer transition-all group ${
                     activePanel === panel.id
-                      ? 'border-indigo-300 bg-indigo-50'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+                      ? 'border-gold/50 bg-gold/10'
+                      : 'border-velvet bg-card hover:border-spotlight'
                   } ${isDragOver ? 'ring-2 ring-indigo-300 ring-offset-1' : ''} ${
                     dragId === panel.id ? 'opacity-50' : ''
                   }`}
                   onClick={() => setActivePanel(panel.id)}
                 >
                   <div className="flex items-start gap-2">
-                    <GripVertical size={14} className="text-slate-300 group-hover:text-slate-500 mt-0.5 flex-shrink-0" />
+                    <GripVertical size={14} className="text-fog group-hover:text-haze mt-0.5 flex-shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-sm font-medium text-slate-800 truncate">{panel.name}</h3>
+                      <h3 className="text-sm font-medium text-bone truncate">{panel.name}</h3>
                       {panel.description && (
-                        <p className="text-xs text-slate-400 mt-1 truncate">{panel.description}</p>
+                        <p className="text-xs text-haze mt-1 truncate">{panel.description}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -165,7 +165,7 @@ export default function FengshenPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={e => e.stopPropagation()}
-                        className="text-slate-400 hover:text-indigo-500"
+                        className="text-haze hover:text-electric"
                       >
                         <ExternalLink size={14} />
                       </a>
@@ -174,7 +174,7 @@ export default function FengshenPage() {
                           e.stopPropagation();
                           deletePanel(panel.id);
                         }}
-                        className="text-slate-400 hover:text-red-500"
+                        className="text-haze hover:text-blood"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -190,14 +190,14 @@ export default function FengshenPage() {
           {selected ? (
             <div className="space-y-4">
               <PanelInsightCard panel={selected} />
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-[600px] 2xl:min-h-[700px]">
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-700">{selected.name}</span>
+              <div className="bg-card rounded-xl border border-velvet overflow-hidden min-h-[600px] 2xl:min-h-[700px]">
+                <div className="px-4 py-3 border-b border-velvet flex items-center justify-between">
+                  <span className="text-sm font-medium text-cream">{selected.name}</span>
                   <a
                     href={selected.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
+                    className="text-xs text-gold hover:underline flex items-center gap-1"
                   >
                     在新窗口打开 <ExternalLink size={12} />
                   </a>
@@ -211,7 +211,7 @@ export default function FengshenPage() {
               </div>
             </div>
           ) : (
-            <div className="h-[600px] flex items-center justify-center text-slate-400 bg-white rounded-xl border border-slate-200">
+            <div className="h-[600px] flex items-center justify-center text-haze bg-card rounded-xl border border-velvet">
               <div className="text-center">
                 <Monitor size={48} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">选择一个看板查看</p>
@@ -376,32 +376,32 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
   }, [ext.available, insights, panel.id, hasTodayInsight]);
 
   return (
-    <div className="bg-gradient-to-br from-indigo-50 via-white to-purple-50/40 rounded-xl border border-indigo-100">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-indigo-100/70 gap-2 flex-wrap">
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
-          <Sparkles size={16} className="text-indigo-500" />
+    <div className="bg-gradient-to-br from-gold/8 via-white to-electric/8 rounded-xl border border-gold/20">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gold/30 gap-2 flex-wrap">
+        <div className="flex items-center gap-2 text-sm font-medium text-bone">
+          <Sparkles size={16} className="text-electric" />
           AI Insight
           {latest && (
-            <span className="text-xs text-slate-400 font-normal ml-2">
+            <span className="text-xs text-haze font-normal ml-2">
               {hasTodayInsight ? '今日已生成' : `上次 ${formatTime(latest.created_at)}`}
             </span>
           )}
           {ext.available && (
-            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 flex items-center gap-1">
+            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-grass/20 text-grass flex items-center gap-1">
               <Zap size={10} /> 扩展已连接
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
           {generating && (
-            <span className="text-xs text-indigo-600 flex items-center gap-1">
+            <span className="text-xs text-gold flex items-center gap-1">
               <RefreshCw size={12} className="animate-spin" /> 分析中...
             </span>
           )}
           {ext.available && !generating && (
             <button
               onClick={captureViaExtension}
-              className="text-xs px-2.5 py-1 rounded-md border border-indigo-200 bg-white text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"
+              className="text-xs px-2.5 py-1 rounded-md border border-gold/40 bg-card text-gold hover:bg-gold/10 flex items-center gap-1"
               title="重新截图分析当前看板"
             >
               <RefreshCw size={11} /> 重新截图
@@ -421,19 +421,19 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
           onClick={() => fileInputRef.current?.click()}
           className={`relative px-4 py-3 rounded-lg border-2 border-dashed cursor-pointer text-center transition-colors ${
             isDragOver
-              ? 'border-indigo-400 bg-indigo-50'
-              : 'border-indigo-200/70 bg-white/60 hover:border-indigo-300 hover:bg-white focus:border-indigo-400 focus:bg-indigo-50/70 outline-none'
+              ? 'border-indigo-400 bg-gold/10'
+              : 'border-gold/40/70 bg-card/60 hover:border-gold/50 hover:bg-card focus:border-indigo-400 focus:bg-gold/10 outline-none'
           }`}
         >
-          <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
-            <Clipboard size={14} className="text-indigo-400" />
+          <div className="flex items-center justify-center gap-2 text-xs text-haze">
+            <Clipboard size={14} className="text-electric" />
             <span>
-              <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] mr-1">⌘V</kbd>
+              <kbd className="px-1.5 py-0.5 bg-sunken border border-velvet rounded text-[10px] mr-1">⌘V</kbd>
               粘贴截图
-              <span className="mx-1 text-slate-300">·</span>
+              <span className="mx-1 text-fog">·</span>
               拖拽图片
-              <span className="mx-1 text-slate-300">·</span>
-              <span className="text-indigo-500">点击上传</span>
+              <span className="mx-1 text-fog">·</span>
+              <span className="text-electric">点击上传</span>
             </span>
           </div>
           <input
@@ -452,7 +452,7 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
         <div className="flex items-center gap-2 text-xs">
           <button
             onClick={() => setShowTextInput(!showTextInput)}
-            className="text-indigo-600 hover:underline"
+            className="text-gold hover:underline"
           >
             {showTextInput ? '收起文字输入' : '或者粘贴文字数据'}
           </button>
@@ -465,12 +465,12 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
               onChange={e => setTextBuffer(e.target.value)}
               placeholder="例如：DAU 100万（昨日 120万），新增 5000，留存率 35%..."
               rows={4}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="w-full px-3 py-2 text-sm border border-velvet rounded-lg focus:outline-none focus:ring-2 focus:ring-gold bg-card"
             />
             <button
               onClick={submitText}
               disabled={!textBuffer.trim() || generating}
-              className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1"
+              className="px-3 py-1.5 text-xs bg-gold text-stage-deep rounded-md hover:bg-gold/90 disabled:opacity-50 flex items-center gap-1"
             >
               <Upload size={12} /> 分析这段文字
             </button>
@@ -478,7 +478,7 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
         )}
 
         {errorMsg && (
-          <div className="px-3 py-2 text-xs bg-red-50 border border-red-200 text-red-600 rounded">
+          <div className="px-3 py-2 text-xs bg-blood/10 border border-blood/30 text-blood rounded">
             {errorMsg}
           </div>
         )}
@@ -486,11 +486,11 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
         {latestResult ? (
           <div className="pt-2 space-y-3">
             {latestResult.summary && (
-              <p className="text-sm text-slate-700 leading-relaxed">{latestResult.summary}</p>
+              <p className="text-sm text-cream leading-relaxed">{latestResult.summary}</p>
             )}
             {latestResult.anomalies?.length > 0 && (
               <div>
-                <h4 className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
+                <h4 className="text-xs font-semibold text-haze mb-1.5 flex items-center gap-1">
                   <AlertTriangle size={12} /> 异常数据提醒
                 </h4>
                 <ul className="space-y-1.5">
@@ -499,15 +499,15 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
                       <span
                         className={`mt-0.5 px-1.5 py-0.5 rounded font-medium ${
                           a.severity === 'high'
-                            ? 'bg-red-100 text-red-600'
+                            ? 'bg-blood/20 text-blood'
                             : a.severity === 'medium'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-slate-100 text-slate-600'
+                            ? 'bg-gold/20 text-gold'
+                            : 'bg-sunken text-cream'
                         }`}
                       >
                         {a.metric}
                       </span>
-                      <span className="text-slate-700 flex-1">{a.observation}</span>
+                      <span className="text-cream flex-1">{a.observation}</span>
                     </li>
                   ))}
                 </ul>
@@ -515,10 +515,10 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
             )}
             {latestResult.insights?.length > 0 && (
               <div>
-                <h4 className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
+                <h4 className="text-xs font-semibold text-haze mb-1.5 flex items-center gap-1">
                   <Lightbulb size={12} /> 关键数据洞察
                 </h4>
-                <ul className="space-y-1 list-disc list-inside text-xs text-slate-700">
+                <ul className="space-y-1 list-disc list-inside text-xs text-cream">
                   {latestResult.insights.map((s, i) => (
                     <li key={i} className="leading-relaxed">{s}</li>
                   ))}
@@ -527,18 +527,18 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
             )}
           </div>
         ) : (
-          <p className="text-xs text-slate-400 pt-1">
+          <p className="text-xs text-haze pt-1">
             {ext.available
               ? '已自动开始截图分析当前看板...'
-              : <>截一张看板的图（{navigator.platform.includes('Mac') ? 'Cmd+Shift+4' : 'Win+Shift+S'}），回到这里按 ⌘V 粘贴即可。装上 <a className="text-indigo-500 hover:underline" href="https://github.com/choijun511/my-workbench/tree/main/extension" target="_blank" rel="noreferrer">Chrome 扩展</a> 之后能自动截图。</>}
+              : <>截一张看板的图（{navigator.platform.includes('Mac') ? 'Cmd+Shift+4' : 'Win+Shift+S'}），回到这里按 ⌘V 粘贴即可。装上 <a className="text-electric hover:underline" href="https://github.com/choijun511/my-workbench/tree/main/extension" target="_blank" rel="noreferrer">Chrome 扩展</a> 之后能自动截图。</>}
           </p>
         )}
 
         {insights && insights.length > 1 && (
-          <div className="pt-3 border-t border-indigo-100/70">
+          <div className="pt-3 border-t border-gold/30">
             <button
               onClick={() => setShowHistory(!showHistory)}
-              className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+              className="text-xs text-haze hover:text-cream flex items-center gap-1"
             >
               {showHistory ? <ChevronUp size={12} /> : <ChevronDown size={12} />} 历史 ({insights.length - 1})
             </button>
@@ -549,11 +549,11 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
                   try { r = JSON.parse(it.result); } catch {}
                   return (
                     <li key={it.id} className="group flex items-start gap-2 text-xs py-1">
-                      <span className="text-slate-400 w-28 flex-shrink-0">{formatTime(it.created_at)}</span>
-                      <span className="flex-1 text-slate-600 truncate">{r?.summary || ''}</span>
+                      <span className="text-haze w-28 flex-shrink-0">{formatTime(it.created_at)}</span>
+                      <span className="flex-1 text-cream truncate">{r?.summary || ''}</span>
                       <button
                         onClick={() => deleteInsight(it.id)}
-                        className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100"
+                        className="text-fog hover:text-blood opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 size={11} />
                       </button>

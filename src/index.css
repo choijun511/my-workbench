@@ -1,19 +1,101 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #4f46e5;
-  --color-primary-light: #818cf8;
-  --color-primary-dark: #3730a3;
+  /* ===== Background tones (stage / dark) ===== */
+  --color-stage-deep: #0b0a0f;
+  --color-stage: #15131c;
+  --color-card: #1d1a26;
+  --color-sunken: #2a2333;
+
+  /* ===== Borders ===== */
+  --color-velvet: #3a3344;
+  --color-spotlight: #5a5468;
+
+  /* ===== Text ===== */
+  --color-bone: #f5f1e8;
+  --color-cream: #ece8e0;
+  --color-haze: #877f93;
+  --color-fog: #525065;
+
+  /* ===== Accents (used sparingly) ===== */
+  --color-gold: #d4a64a;
+  --color-gold-deep: #a87f2f;
+  --color-electric: #4f8fff;
+  --color-blood: #c83232;
+  --color-grass: #4ade80;
+
+  /* ===== Legacy primary mapping (compat for not-yet-migrated places) ===== */
+  --color-primary: #d4a64a;
+  --color-primary-light: #e8be65;
+  --color-primary-dark: #a87f2f;
   --color-p0: #ef4444;
   --color-p1: #f97316;
   --color-p2: #3b82f6;
   --color-p3: #9ca3af;
+
+  /* ===== Fonts ===== */
+  --font-sans: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, ui-monospace, monospace;
+}
+
+html, body, #root {
+  background: var(--color-stage-deep);
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  font-family: var(--font-sans);
+  color: var(--color-cream);
   -webkit-font-smoothing: antialiased;
-  background: #f8fafc;
-  color: #1e293b;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.005em;
+  color-scheme: dark;
+}
+
+/* Form inputs need explicit dark-friendly defaults */
+input, textarea, select {
+  font-family: inherit;
+  color: inherit;
+}
+input::placeholder, textarea::placeholder { color: var(--color-haze); }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--color-stage); }
+::-webkit-scrollbar-thumb { background: var(--color-velvet); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-spotlight); }
+
+/* Selection */
+::selection { background: rgba(212, 166, 74, 0.3); color: #f5f1e8; }
+
+/* Subtle film-grain overlay (use via .grain class) */
+.grain { position: relative; }
+.grain::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.5' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
+  opacity: 0.05;
+  border-radius: inherit;
+  mix-blend-mode: overlay;
+}
+
+/* Prism edge — Pink Floyd Dark Side spectrum, used as score outline */
+.prism-edge {
+  background: linear-gradient(90deg,
+    #ff3b3b 0%, #ffa53b 16%, #ffe53b 32%, #6dff5b 50%,
+    #4ff0ff 65%, #4f8fff 82%, #b06bff 100%);
+}
+
+/* Heading display class — bigger letter spacing, the album-cover feel */
+.font-display {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Disabled state base */
+button:disabled, input:disabled, textarea:disabled, select:disabled {
+  cursor: not-allowed;
 }

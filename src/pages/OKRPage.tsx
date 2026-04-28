@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi';
+import { useConfirm } from '../components/ui/Dialog';
 import type { Objective, KeyResult, OKRProject, KRLog } from '../types';
 import { Plus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, Folder, MessageSquare } from 'lucide-react';
 
@@ -31,13 +32,14 @@ const projectColorPalette = [
 ];
 
 const statusLabels: Record<string, { label: string; color: string }> = {
-  not_started: { label: '未开始', color: 'bg-slate-100 text-slate-600' },
-  in_progress: { label: '进行中', color: 'bg-blue-100 text-blue-600' },
-  at_risk: { label: '有风险', color: 'bg-amber-100 text-amber-600' },
-  completed: { label: '已完成', color: 'bg-emerald-100 text-emerald-600' },
+  not_started: { label: '未开始', color: 'bg-sunken text-cream' },
+  in_progress: { label: '进行中', color: 'bg-electric/20 text-electric' },
+  at_risk: { label: '有风险', color: 'bg-gold/20 text-gold' },
+  completed: { label: '已完成', color: 'bg-grass/20 text-grass' },
 };
 
 export default function OKRPage() {
+  const confirmDialog = useConfirm();
   const [quarter, setQuarter] = useState(getCurrentQuarter());
   const { data: projects, refetch: refetchProjects } = useApi<OKRProject[]>(
     `/api/okr/projects?quarter=${quarter}`
@@ -71,7 +73,7 @@ export default function OKRPage() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      alert(data.error || '添加失败');
+      await confirmDialog({ title: '添加失败', body: data.error || '未知错误', confirmLabel: '知道了', cancelLabel: '' });
       return;
     }
     setNewTitle('');
@@ -95,11 +97,17 @@ export default function OKRPage() {
   };
 
   const deleteProject = async (id: number) => {
-    if (!confirm('删除项目？该项目下的目标会被移到该季度的第一个项目。')) return;
+    const ok = await confirmDialog({
+      title: '删除项目？',
+      body: '该项目下的目标会被移到该季度的第一个项目。',
+      confirmLabel: '删除',
+      danger: true,
+    });
+    if (!ok) return;
     const res = await fetch(`/api/okr/projects/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      alert(data.error || '删除失败');
+      await confirmDialog({ title: '删除失败', body: data.error || '未知错误', confirmLabel: '知道了', cancelLabel: '' });
       return;
     }
     if (newProjectId === id) setNewProjectId(null);
@@ -111,19 +119,19 @@ export default function OKRPage() {
     <div className="max-w-screen-xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">OKR 目标跟踪</h1>
-          <p className="text-sm text-slate-500 mt-1">追踪你的季度关键目标和成果</p>
+          <h1 className="text-2xl font-bold text-bone">OKR 目标跟踪</h1>
+          <p className="text-sm text-haze mt-1">追踪你的季度关键目标和成果</p>
         </div>
       </div>
 
       {/* Quarter Tabs */}
-      <div className="flex gap-1 mb-4 bg-slate-100 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 mb-4 bg-sunken rounded-lg p-1 w-fit">
         {quarters.map(q => (
           <button
             key={q}
             onClick={() => { setQuarter(q); setNewProjectId(null); }}
             className={`px-4 py-2 text-sm rounded-md font-medium transition-colors ${
-              quarter === q ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              quarter === q ? 'bg-card text-bone shadow-sm' : 'text-haze hover:text-cream'
             }`}
           >
             {q.split('-')[1]}
@@ -132,18 +140,18 @@ export default function OKRPage() {
       </div>
 
       {/* Project management bar */}
-      <div className="flex flex-wrap items-center gap-2 mb-4 text-xs text-slate-500">
+      <div className="flex flex-wrap items-center gap-2 mb-4 text-xs text-haze">
         <span className="flex items-center gap-1 mr-1"><Folder size={13} /> 项目：</span>
         {projects?.map(p => (
           <div
             key={p.id}
-            className="group flex items-center gap-1.5 pl-2.5 pr-1 py-0.5 rounded-full bg-white border border-slate-200"
+            className="group flex items-center gap-1.5 pl-2.5 pr-1 py-0.5 rounded-full bg-card border border-velvet"
           >
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-            <span className="text-slate-600">{p.name}</span>
+            <span className="text-cream">{p.name}</span>
             <button
               onClick={() => deleteProject(p.id)}
-              className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="text-fog hover:text-blood opacity-0 group-hover:opacity-100 transition-opacity"
               title="删除项目"
             >
               <X size={12} />
@@ -161,15 +169,15 @@ export default function OKRPage() {
                 if (e.key === 'Escape') { setAddingProject(false); setNewProjectName(''); }
               }}
               placeholder="项目名称"
-              className="px-2.5 py-0.5 text-xs border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-28"
+              className="px-2.5 py-0.5 text-xs border border-velvet rounded-full focus:outline-none focus:ring-2 focus:ring-gold bg-card w-28"
             />
-            <button onClick={addProject} className="text-emerald-500 hover:text-emerald-700"><Check size={14} /></button>
-            <button onClick={() => { setAddingProject(false); setNewProjectName(''); }} className="text-slate-400 hover:text-slate-600"><X size={14} /></button>
+            <button onClick={addProject} className="text-grass hover:text-grass"><Check size={14} /></button>
+            <button onClick={() => { setAddingProject(false); setNewProjectName(''); }} className="text-haze hover:text-cream"><X size={14} /></button>
           </div>
         ) : (
           <button
             onClick={() => setAddingProject(true)}
-            className="flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-dashed border-slate-300 hover:border-indigo-400 hover:text-indigo-600"
+            className="flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-dashed border-spotlight hover:border-gold/60 hover:text-gold"
           >
             <Plus size={12} /> 新建项目
           </button>
@@ -177,12 +185,12 @@ export default function OKRPage() {
       </div>
 
       {/* Add Objective with project picker */}
-      <div className="flex flex-wrap gap-2 mb-2 items-center bg-white border border-slate-200 rounded-lg p-2">
+      <div className="flex flex-wrap gap-2 mb-2 items-center bg-card border border-velvet rounded-lg p-2">
         <select
           value={effectiveProjectId ?? ''}
           onChange={e => setNewProjectId(Number(e.target.value))}
           disabled={!projects?.length}
-          className="px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-slate-50"
+          className="px-3 py-2 text-sm border border-velvet rounded-md focus:outline-none focus:ring-2 focus:ring-gold bg-card disabled:bg-stage"
         >
           {!projects?.length && <option value="">请先创建项目</option>}
           {projects?.map(p => (
@@ -195,24 +203,24 @@ export default function OKRPage() {
           onKeyDown={e => e.key === 'Enter' && addObjective()}
           placeholder={reachedLimit ? `已达上限 ${OBJECTIVE_LIMIT}` : '添加新的 Objective...'}
           disabled={!effectiveProjectId || reachedLimit}
-          className="flex-1 min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-slate-50 disabled:text-slate-400"
+          className="flex-1 min-w-0 px-3 py-2 text-sm border border-velvet rounded-md focus:outline-none focus:ring-2 focus:ring-gold bg-card disabled:bg-stage disabled:text-haze"
         />
         <button
           onClick={addObjective}
           disabled={!effectiveProjectId || reachedLimit}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 flex items-center gap-1.5 disabled:bg-slate-300 disabled:cursor-not-allowed"
+          className="px-4 py-2 bg-gold text-stage-deep rounded-md text-sm font-medium hover:bg-gold/90 flex items-center gap-1.5 disabled:bg-slate-300 disabled:cursor-not-allowed"
         >
           <Plus size={16} /> 添加
         </button>
       </div>
-      <div className="text-xs text-slate-400 mb-6 text-right">
+      <div className="text-xs text-haze mb-6 text-right">
         {objectivesCount} / {OBJECTIVE_LIMIT}
       </div>
 
       {/* Objectives List */}
       <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
         {!objectives?.length ? (
-          <div className="text-center py-12 text-slate-400 col-span-full">
+          <div className="text-center py-12 text-haze col-span-full">
             <p className="text-sm">当前季度暂无 OKR 目标</p>
           </div>
         ) : (
@@ -285,7 +293,7 @@ function ObjectiveCard({
     >
       <div className="p-5">
         <div className="flex items-start gap-3">
-          <button onClick={() => setExpanded(!expanded)} className="mt-1 text-slate-400 hover:text-slate-600">
+          <button onClick={() => setExpanded(!expanded)} className="mt-1 text-haze hover:text-cream">
             {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </button>
           <div className="flex-1 min-w-0">
@@ -306,12 +314,12 @@ function ObjectiveCard({
                   {project?.name || '未分组'}
                 </button>
                 {editingProject && (
-                  <div className="absolute top-7 left-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-10 min-w-[8rem]">
+                  <div className="absolute top-7 left-0 bg-card border border-velvet rounded-lg shadow-lg py-1 z-10 min-w-[8rem]">
                     {projects.map(p => (
                       <button
                         key={p.id}
                         onClick={() => updateProject(p.id)}
-                        className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50"
+                        className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs hover:bg-stage"
                       >
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
                         {p.name}
@@ -320,7 +328,7 @@ function ObjectiveCard({
                   </div>
                 )}
               </div>
-              <h3 className="text-base font-semibold text-slate-800 break-words flex-1 min-w-0">{objective.title}</h3>
+              <h3 className="text-base font-semibold text-bone break-words flex-1 min-w-0">{objective.title}</h3>
               <div className="relative">
                 <button
                   onClick={() => setEditingStatus(!editingStatus)}
@@ -329,12 +337,12 @@ function ObjectiveCard({
                   {statusInfo.label}
                 </button>
                 {editingStatus && (
-                  <div className="absolute top-7 right-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-10">
+                  <div className="absolute top-7 right-0 bg-card border border-velvet rounded-lg shadow-lg py-1 z-10">
                     {Object.entries(statusLabels).map(([key, val]) => (
                       <button
                         key={key}
                         onClick={() => updateStatus(key)}
-                        className="block w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50"
+                        className="block w-full text-left px-3 py-1.5 text-xs hover:bg-stage"
                       >
                         {val.label}
                       </button>
@@ -344,25 +352,25 @@ function ObjectiveCard({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div className="flex-1 h-2 bg-sunken rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    objective.progress >= 70 ? 'bg-emerald-500' : objective.progress >= 40 ? 'bg-amber-500' : 'bg-indigo-500'
+                    objective.progress >= 70 ? 'bg-grass/100' : objective.progress >= 40 ? 'bg-gold/100' : 'bg-electric'
                   }`}
                   style={{ width: `${Math.min(objective.progress, 100)}%` }}
                 />
               </div>
-              <span className="text-sm font-medium text-slate-600 w-10 text-right">{objective.progress}%</span>
+              <span className="text-sm font-medium text-cream w-10 text-right">{objective.progress}%</span>
             </div>
           </div>
-          <button onClick={deleteObjective} className="text-slate-300 hover:text-red-500 mt-1">
+          <button onClick={deleteObjective} className="text-fog hover:text-blood mt-1">
             <Trash2 size={16} />
           </button>
         </div>
       </div>
 
       {expanded && (
-        <div className="border-t border-slate-100 px-5 py-4 bg-white/60">
+        <div className="border-t border-velvet px-5 py-4 bg-card/60">
           <div className="space-y-2 mb-3">
             {objective.key_results.map(kr => (
               <KRRow key={kr.id} kr={kr} onUpdate={onUpdate} />
@@ -374,9 +382,9 @@ function ObjectiveCard({
               onChange={e => setNewKR(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addKR()}
               placeholder="添加 Key Result..."
-              className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="flex-1 px-3 py-2 text-sm border border-velvet rounded-lg focus:outline-none focus:ring-2 focus:ring-gold bg-card"
             />
-            <button onClick={addKR} className="px-3 py-2 text-indigo-600 hover:bg-indigo-50 rounded-lg text-sm">
+            <button onClick={addKR} className="px-3 py-2 text-gold hover:bg-gold/10 rounded-lg text-sm">
               <Plus size={16} />
             </button>
           </div>
@@ -437,10 +445,10 @@ function KRRow({ kr, onUpdate }: { kr: KeyResult; onUpdate: () => void }) {
   const logCount = logs?.length;
 
   return (
-    <div className="bg-white rounded-lg border border-slate-100">
+    <div className="bg-card rounded-lg border border-velvet">
       <div className="flex items-start gap-3 py-2 px-3">
         <div className="flex-1 min-w-0">
-          <span className="text-sm text-slate-700 break-words whitespace-pre-wrap">{kr.title}</span>
+          <span className="text-sm text-cream break-words whitespace-pre-wrap">{kr.title}</span>
         </div>
         {editing ? (
           <div className="flex items-center gap-1">
@@ -448,23 +456,23 @@ function KRRow({ kr, onUpdate }: { kr: KeyResult; onUpdate: () => void }) {
               type="number"
               value={value}
               onChange={e => setValue(Number(e.target.value))}
-              className="w-16 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-16 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-gold"
               autoFocus
             />
-            <span className="text-xs text-slate-400">/ {kr.target_value}{kr.unit}</span>
-            <button onClick={save} className="text-emerald-500 hover:text-emerald-700"><Check size={14} /></button>
-            <button onClick={() => setEditing(false)} className="text-slate-400 hover:text-slate-600"><X size={14} /></button>
+            <span className="text-xs text-haze">/ {kr.target_value}{kr.unit}</span>
+            <button onClick={save} className="text-grass hover:text-grass"><Check size={14} /></button>
+            <button onClick={() => setEditing(false)} className="text-haze hover:text-cream"><X size={14} /></button>
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">{kr.current_value}/{kr.target_value}{kr.unit}</span>
-            <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
+            <span className="text-xs text-haze">{kr.current_value}/{kr.target_value}{kr.unit}</span>
+            <div className="w-16 h-1.5 bg-sunken rounded-full overflow-hidden">
+              <div className="h-full bg-electric rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
             </div>
-            <span className="text-xs font-medium text-slate-600 w-8">{pct}%</span>
+            <span className="text-xs font-medium text-cream w-8">{pct}%</span>
             <button
               onClick={toggleLogs}
-              className={`flex items-center gap-0.5 ${showLogs ? 'text-indigo-500' : 'text-slate-300 hover:text-indigo-500'}`}
+              className={`flex items-center gap-0.5 ${showLogs ? 'text-electric' : 'text-fog hover:text-electric'}`}
               title="进展日志"
             >
               <MessageSquare size={13} />
@@ -472,45 +480,45 @@ function KRRow({ kr, onUpdate }: { kr: KeyResult; onUpdate: () => void }) {
                 <span className="text-[10px] font-medium">{logCount}</span>
               )}
             </button>
-            <button onClick={() => setEditing(true)} className="text-slate-300 hover:text-indigo-500"><Edit3 size={13} /></button>
-            <button onClick={remove} className="text-slate-300 hover:text-red-500"><Trash2 size={13} /></button>
+            <button onClick={() => setEditing(true)} className="text-fog hover:text-electric"><Edit3 size={13} /></button>
+            <button onClick={remove} className="text-fog hover:text-blood"><Trash2 size={13} /></button>
           </div>
         )}
       </div>
 
       {showLogs && (
-        <div className="border-t border-slate-100 px-3 py-2.5 bg-slate-50/60 space-y-2">
+        <div className="border-t border-velvet px-3 py-2.5 bg-sunken/60 space-y-2">
           <div className="flex gap-2">
             <input
               value={newLog}
               onChange={e => setNewLog(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addLog()}
               placeholder="记录关键进展..."
-              className="flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="flex-1 px-2.5 py-1.5 text-xs border border-velvet rounded-md focus:outline-none focus:ring-2 focus:ring-gold bg-card"
             />
             <button
               onClick={addLog}
               disabled={!newLog.trim()}
-              className="px-2.5 py-1.5 bg-indigo-600 text-white rounded-md text-xs hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center"
+              className="px-2.5 py-1.5 bg-gold text-stage-deep rounded-md text-xs hover:bg-gold/90 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center"
             >
               <Plus size={13} />
             </button>
           </div>
           {loadingLogs && logs === null ? (
-            <p className="text-xs text-slate-400 py-2">加载中...</p>
+            <p className="text-xs text-haze py-2">加载中...</p>
           ) : !logs?.length ? (
-            <p className="text-xs text-slate-400 py-1">暂无进展记录</p>
+            <p className="text-xs text-haze py-1">暂无进展记录</p>
           ) : (
             <ul className="space-y-1">
               {logs.map(log => (
-                <li key={log.id} className="group flex items-start gap-2 py-1.5 px-2 rounded bg-white border border-slate-100">
+                <li key={log.id} className="group flex items-start gap-2 py-1.5 px-2 rounded bg-card border border-velvet">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-slate-700 whitespace-pre-wrap break-words">{log.content}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{formatLogTime(log.created_at)}</p>
+                    <p className="text-xs text-cream whitespace-pre-wrap break-words">{log.content}</p>
+                    <p className="text-[10px] text-haze mt-0.5">{formatLogTime(log.created_at)}</p>
                   </div>
                   <button
                     onClick={() => removeLog(log.id)}
-                    className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="text-fog hover:text-blood opacity-0 group-hover:opacity-100 transition-opacity"
                     title="删除"
                   >
                     <X size={12} />
