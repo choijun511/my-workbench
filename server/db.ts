@@ -81,6 +81,18 @@ const decisionColNames = new Set(decisionCols.map(c => c.name));
 if (decisionCols.length && !decisionColNames.has('last_reminded_at')) {
   db.exec(`ALTER TABLE decisions ADD COLUMN last_reminded_at TEXT`);
 }
+if (decisionCols.length && !decisionColNames.has('odds')) {
+  db.exec(`ALTER TABLE decisions ADD COLUMN odds REAL DEFAULT 1`);
+}
+if (decisionCols.length && !decisionColNames.has('conviction')) {
+  db.exec(`ALTER TABLE decisions ADD COLUMN conviction INTEGER DEFAULT 1`);
+}
+if (decisionCols.length && !decisionColNames.has('importance')) {
+  db.exec(`ALTER TABLE decisions ADD COLUMN importance INTEGER DEFAULT 1`);
+}
+if (decisionCols.length && !decisionColNames.has('non_consensus')) {
+  db.exec(`ALTER TABLE decisions ADD COLUMN non_consensus INTEGER DEFAULT 1`);
+}
 
 const todoCols = db.prepare("PRAGMA table_info(todos)").all() as { name: string }[];
 const todoColNames = new Set(todoCols.map(c => c.name));
@@ -150,6 +162,10 @@ db.exec(`
     reflection_log TEXT DEFAULT '[]',       -- JSON [{at, status, note}]
     next_review_at TEXT,                    -- when to nudge for verify follow-up
     last_reminded_at TEXT,                  -- last time the user got a Feishu reminder
+    odds REAL DEFAULT 1,                    -- bet leverage; 2 = double points both ways
+    conviction INTEGER DEFAULT 1,           -- 1-3 how sure the decider was
+    importance INTEGER DEFAULT 1,           -- 1-3 how much the outcome matters
+    non_consensus INTEGER DEFAULT 1,        -- 1-3 how contrarian the call is
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );

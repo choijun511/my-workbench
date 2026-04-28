@@ -20,15 +20,64 @@ function cosine(a: number[], b: number[]): number {
   return dot / Math.sqrt(na * nb);
 }
 
+function clampInt(v: any, lo: number, hi: number, def: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return def;
+  return Math.max(lo, Math.min(hi, Math.round(n)));
+}
+function clampNum(v: any, lo: number, hi: number, def: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return def;
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function latestVerdict(reflectionLog: Array<{ status?: string }>): 'holds' | 'wrong' | null {
+  for (let i = reflectionLog.length - 1; i >= 0; i--) {
+    const s = reflectionLog[i]?.status;
+    if (s === 'holds' || s === 'wrong') return s;
+  }
+  return null;
+}
+
+function computeJudgmentScore(d: {
+  odds?: number; conviction?: number; importance?: number; non_consensus?: number;
+  reflection_log: Array<{ status?: string }>;
+}): { score: number; verdict: 'holds' | 'wrong' | 'pending'; multiplier: number } {
+  const odds = d.odds ?? 1;
+  const conviction = d.conviction ?? 1;
+  const importance = d.importance ?? 1;
+  const nonConsensus = d.non_consensus ?? 1;
+  const multiplier = odds * conviction * importance * nonConsensus;
+  const verdict = latestVerdict(d.reflection_log || []);
+  if (!verdict) return { score: 0, verdict: 'pending', multiplier };
+  const base = verdict === 'holds' ? 1 : -2;
+  return { score: base * multiplier, verdict, multiplier };
+}
+
 function rowToDecision(r: any) {
+  const reflectionLog = safeJson<any[]>(r.reflection_log, []);
+  const judgment = computeJudgmentScore({
+    odds: r.odds,
+    conviction: r.conviction,
+    importance: r.importance,
+    non_consensus: r.non_consensus,
+    reflection_log: reflectionLog,
+  });
   return {
     ...r,
     alternatives: safeJson(r.alternatives, []),
     assumptions: safeJson(r.assumptions, []),
     verify: r.verify ? safeJson(r.verify, null) : null,
     tags: safeJson(r.tags, []),
-    reflection_log: safeJson(r.reflection_log, []),
-    embedding: undefined, // never ship raw embeddings to client
+    reflection_log: reflectionLog,
+    odds: r.odds ?? 1,
+    conviction: r.conviction ?? 1,
+    importance: r.importance ?? 1,
+    non_consensus: r.non_consensus ?? 1,
+    judgment_score: judgment.score,
+    judgment_verdict: judgment.verdict,
+    judgment_multiplier: judgment.multiplier,
+    embedding: undefined,
   };
 }
 function safeJson<T>(s: any, fallback: T): T {
@@ -57,7 +106,7 @@ router.get('/', (req, res) => {
   res.json(filtered.map(rowToDecision));
 });
 
-// Stats (counts per status, plus due-for-review count)
+// Stats (counts per status, plus due-for-review count, plus aggregate judgment score)
 router.get('/stats', (_req, res) => {
   const rows = db.prepare(`SELECT status, COUNT(*) as c FROM decisions GROUP BY status`).all() as Array<{ status: string; c: number }>;
   const counts: Record<string, number> = {};
@@ -65,7 +114,43 @@ router.get('/stats', (_req, res) => {
   const due = db.prepare(
     `SELECT COUNT(*) AS c FROM decisions WHERE status = 'active' AND next_review_at IS NOT NULL AND next_review_at <= datetime('now')`
   ).get() as { c: number };
-  res.json({ counts, due_for_review: due.c });
+
+  // Judgment score: walk all decisions, compute score per row
+  const all = db.prepare(`SELECT odds, conviction, importance, non_consensus, reflection_log FROM decisions`).all() as any[];
+  let total = 0;
+  let holds = 0;
+  let wrong = 0;
+  let pending = 0;
+  let bestScore = 0;
+  let worstScore = 0;
+  for (const r of all) {
+    const log = safeJson<any[]>(r.reflection_log, []);
+    const j = computeJudgmentScore({
+      odds: r.odds,
+      conviction: r.conviction,
+      importance: r.importance,
+      non_consensus: r.non_consensus,
+      reflection_log: log,
+    });
+    total += j.score;
+    if (j.verdict === 'holds') holds += 1;
+    else if (j.verdict === 'wrong') wrong += 1;
+    else pending += 1;
+    if (j.score > bestScore) bestScore = j.score;
+    if (j.score < worstScore) worstScore = j.score;
+  }
+  res.json({
+    counts,
+    due_for_review: due.c,
+    judgment: {
+      total_score: total,
+      holds_count: holds,
+      wrong_count: wrong,
+      pending_count: pending,
+      best_score: bestScore,
+      worst_score: worstScore,
+    },
+  });
 });
 
 // Detail
@@ -135,6 +220,22 @@ router.put('/:id', (req, res) => {
       sets.push(`${k} = ?`);
       params.push(JSON.stringify(req.body[k]));
     }
+  }
+  if (req.body.odds !== undefined) {
+    sets.push(`odds = ?`);
+    params.push(clampNum(req.body.odds, 0.1, 100, 1));
+  }
+  if (req.body.conviction !== undefined) {
+    sets.push(`conviction = ?`);
+    params.push(clampInt(req.body.conviction, 1, 3, 1));
+  }
+  if (req.body.importance !== undefined) {
+    sets.push(`importance = ?`);
+    params.push(clampInt(req.body.importance, 1, 3, 1));
+  }
+  if (req.body.non_consensus !== undefined) {
+    sets.push(`non_consensus = ?`);
+    params.push(clampInt(req.body.non_consensus, 1, 3, 1));
   }
   if (!sets.length) return res.json({ success: true });
   sets.push(`updated_at = datetime('now')`);

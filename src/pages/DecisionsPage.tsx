@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi';
-import type { Decision, DecisionStatus, DecisionRelated, DecisionLinks, DecisionLinkKind } from '../types';
+import type { Decision, DecisionStatus, DecisionRelated, DecisionLinks, DecisionLinkKind, DecisionStats } from '../types';
 import {
   BookOpen,
   Plus,
@@ -51,9 +51,7 @@ export default function DecisionsPage() {
   }, [filter, search]);
 
   const { data: decisions, refetch } = useApi<Decision[]>(queryUrl);
-  const { data: stats, refetch: refetchStats } = useApi<{ counts: Record<string, number>; due_for_review: number }>(
-    '/api/decisions/stats'
-  );
+  const { data: stats, refetch: refetchStats } = useApi<DecisionStats>('/api/decisions/stats');
 
   const refreshAll = () => {
     refetch();
@@ -80,14 +78,17 @@ export default function DecisionsPage() {
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <BookOpen size={22} /> 决策
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            从 AI 对话中捕获产品决策，时间线 + 关联 + 反思一体
+          <div className="text-sm text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+            <span>从 AI 对话中捕获产品决策，时间线 + 关联 + 反思一体</span>
             {(stats?.due_for_review ?? 0) > 0 && (
-              <span className="ml-3 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                 <Calendar size={11} /> {stats!.due_for_review} 条待复盘
               </span>
             )}
-          </p>
+            {stats?.judgment && (stats.judgment.holds_count > 0 || stats.judgment.wrong_count > 0) && (
+              <ScoreBadge score={stats.judgment.total_score} subtitle={`${stats.judgment.holds_count}对 / ${stats.judgment.wrong_count}错 / ${stats.judgment.pending_count}待定`} />
+            )}
+          </div>
         </div>
         <button
           onClick={() => setShowCapture(true)}
@@ -350,7 +351,10 @@ function DecisionDetail({
   };
 
   const reflect = async (status: 'holds' | 'wrong' | 'pivoted' | 'still_thinking') => {
-    const note = prompt('补充一句反思 (可选):') || '';
+    let confirmMsg = '补充一句反思 (可选):';
+    if (status === 'holds') confirmMsg = `判断对了 → +${d.judgment_multiplier} 分。补充一句反思 (可选):`;
+    if (status === 'wrong') confirmMsg = `判断错了 → -${2 * d.judgment_multiplier} 分。补充一句反思 (可选):`;
+    const note = prompt(confirmMsg) || '';
     await apiPost(`/api/decisions/${id}/reflect`, { status, note });
     refetch();
     onChange();
@@ -393,6 +397,7 @@ function DecisionDetail({
                 <a href={d.source_url} target="_blank" rel="noreferrer" className="ml-2 text-indigo-500 hover:underline">原文链接</a>
               )}
             </p>
+            <StakeMeter d={d} />
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             {d.status === 'draft' && (
@@ -598,6 +603,13 @@ function DecisionEditor({ d, onCancel, onSaved }: { d: Decision; onCancel: () =>
   const [tagsText, setTagsText] = useState(d.tags.join(', '));
   const [verifyMethod, setVerifyMethod] = useState(d.verify?.method || '');
   const [verifyDays, setVerifyDays] = useState(d.verify?.after_days?.toString() || '7');
+  const [odds, setOdds] = useState(d.odds.toString());
+  const [conviction, setConviction] = useState(d.conviction);
+  const [importance, setImportance] = useState(d.importance);
+  const [nonConsensus, setNonConsensus] = useState(d.non_consensus);
+
+  const oddsNum = Number(odds) || 1;
+  const previewMultiplier = oddsNum * conviction * importance * nonConsensus;
 
   const save = async () => {
     const patch: any = {
@@ -605,6 +617,10 @@ function DecisionEditor({ d, onCancel, onSaved }: { d: Decision; onCancel: () =>
       decision,
       context,
       tags: tagsText.split(',').map(t => t.trim()).filter(Boolean),
+      odds: oddsNum,
+      conviction,
+      importance,
+      non_consensus: nonConsensus,
     };
     if (verifyMethod.trim()) {
       patch.verify = { method: verifyMethod.trim(), after_days: Number(verifyDays) || 7 };
@@ -666,6 +682,37 @@ function DecisionEditor({ d, onCancel, onSaved }: { d: Decision; onCancel: () =>
         />
         <span className="text-slate-500">天后</span>
       </div>
+
+      <div className="border-t border-slate-100 pt-3 mt-2">
+        <div className="flex items-center justify-between mb-2">
+          <FieldLabel>判断力评分参数</FieldLabel>
+          <span className="text-[11px] text-slate-500">
+            倍数 = {previewMultiplier} · 对了 +{previewMultiplier} · 错了 -{previewMultiplier * 2}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <ScoreInput label="赔率" hint="≥0.1，敢下重注就调高">
+            <input
+              type="number"
+              value={odds}
+              onChange={e => setOdds(e.target.value)}
+              min={0.1}
+              step={0.5}
+              className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </ScoreInput>
+          <ScoreInput label="确信度" hint="3 = 非常笃定">
+            <DotPicker value={conviction} onChange={setConviction} />
+          </ScoreInput>
+          <ScoreInput label="重要性" hint="3 = 高杠杆决定">
+            <DotPicker value={importance} onChange={setImportance} />
+          </ScoreInput>
+          <ScoreInput label="非共识度" hint="3 = 大家不同意，我坚持">
+            <DotPicker value={nonConsensus} onChange={setNonConsensus} />
+          </ScoreInput>
+        </div>
+      </div>
+
       <div className="flex justify-end gap-2 pt-2">
         <button onClick={onCancel} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800 flex items-center gap-1">
           <X size={13} /> 取消
@@ -747,6 +794,103 @@ function RelatedRow({
         </div>
       )}
     </li>
+  );
+}
+
+function StakeMeter({ d }: { d: Decision }) {
+  const positive = d.judgment_score > 0;
+  const negative = d.judgment_score < 0;
+  const pending = d.judgment_verdict === 'pending';
+
+  return (
+    <div className="flex items-center gap-3 mt-3 flex-wrap text-[11px]">
+      <Stake label="赔率" value={`${d.odds}×`} />
+      <Stake label="确信" dots={d.conviction} />
+      <Stake label="重要" dots={d.importance} />
+      <Stake label="非共识" dots={d.non_consensus} />
+      <span className="text-slate-300">·</span>
+      <span className={
+        'inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono font-medium ' +
+        (pending
+          ? 'bg-slate-100 text-slate-500'
+          : positive
+          ? 'bg-emerald-100 text-emerald-700'
+          : 'bg-red-100 text-red-600')
+      }>
+        {pending ? `押注 ${d.judgment_multiplier}× · 未结算` :
+         (positive ? '+' : '') + d.judgment_score + ' 分'}
+      </span>
+    </div>
+  );
+}
+
+function Stake({ label, value, dots }: { label: string; value?: string; dots?: number }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-slate-500">
+      <span className="text-slate-400">{label}</span>
+      {dots !== undefined ? (
+        <span className="font-mono">
+          {[1, 2, 3].map(i => (
+            <span key={i} className={i <= dots ? 'text-indigo-500' : 'text-slate-200'}>●</span>
+          ))}
+        </span>
+      ) : (
+        <span className="font-mono font-medium text-slate-700">{value}</span>
+      )}
+    </span>
+  );
+}
+
+function ScoreBadge({ score, subtitle }: { score: number; subtitle?: string }) {
+  const positive = score > 0;
+  const negative = score < 0;
+  return (
+    <span className={
+      'inline-flex items-center gap-2 text-xs px-2 py-0.5 rounded-full ' +
+      (positive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+       negative ? 'bg-red-50 text-red-600 border border-red-200' :
+       'bg-slate-50 text-slate-500 border border-slate-200')
+    }>
+      <span className="font-mono font-semibold">
+        {positive ? '+' : ''}{score} 分
+      </span>
+      {subtitle && <span className="text-slate-400 font-normal">· {subtitle}</span>}
+    </span>
+  );
+}
+
+function ScoreInput({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <span className="text-xs text-slate-600 font-medium">{label}</span>
+        <span className="text-[10px] text-slate-400">{hint}</span>
+      </div>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
+function DotPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3].map(i => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => onChange(i)}
+          className={
+            'w-7 h-7 rounded-md border text-sm font-medium transition-colors ' +
+            (value >= i
+              ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+              : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300')
+          }
+          title={`${i} / 3`}
+        >
+          {i}
+        </button>
+      ))}
+    </div>
   );
 }
 

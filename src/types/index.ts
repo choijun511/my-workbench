@@ -122,7 +122,7 @@ export interface Decision {
   assumptions: string[];
   verify: DecisionVerify | null;
   status: DecisionStatus;
-  confidence: number | null;
+  confidence: number | null;          // Gemini extraction confidence (0-1)
   tags: string[];
   supersedes_id: number | null;
   source_tool: string | null;
@@ -131,8 +131,30 @@ export interface Decision {
   raw_excerpt: string;
   reflection_log: DecisionReflection[];
   next_review_at: string | null;
+  // Judgment scoring inputs
+  odds: number;
+  conviction: number;        // 1-3
+  importance: number;        // 1-3
+  non_consensus: number;     // 1-3
+  // Computed fields
+  judgment_score: number;
+  judgment_verdict: 'holds' | 'wrong' | 'pending';
+  judgment_multiplier: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface DecisionStats {
+  counts: Record<string, number>;
+  due_for_review: number;
+  judgment: {
+    total_score: number;
+    holds_count: number;
+    wrong_count: number;
+    pending_count: number;
+    best_score: number;
+    worst_score: number;
+  };
 }
 
 export type DecisionLinkKind = 'related' | 'extends' | 'contradicts' | 'supersedes' | 'reverts';
