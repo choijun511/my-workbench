@@ -99,3 +99,99 @@ input::placeholder, textarea::placeholder { color: var(--color-haze); }
 button:disabled, input:disabled, textarea:disabled, select:disabled {
   cursor: not-allowed;
 }
+
+/* ==============================
+   Animation utilities (D phase)
+   ============================== */
+
+/* Prism rainbow ring, slowly shifting (Pink Floyd Dark Side spectrum).
+   Double-gradient background-clip trick: inner stage-deep + outer rainbow border.
+   Consumer must use the .prism-ring class only — the inner fill is hardcoded. */
+@keyframes prism-shift {
+  to { background-position: 0 0, 200% 0; }
+}
+.prism-ring {
+  border: 1.5px solid transparent;
+  background-image:
+    linear-gradient(var(--color-stage-deep), var(--color-stage-deep)),
+    linear-gradient(90deg,
+      #ff3b3b 0%, #ffa53b 14%, #ffe53b 28%, #6dff5b 42%,
+      #4ff0ff 56%, #4f8fff 70%, #b06bff 85%, #ff3b3b 100%);
+  background-origin: padding-box, border-box;
+  background-clip: padding-box, border-box;
+  background-size: 100% 100%, 200% 100%;
+  animation: prism-shift 5s linear infinite;
+}
+
+/* Soft prism glow for very-high-stake scores */
+@keyframes prism-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 59, 0.0), 0 0 0 0 rgba(79, 143, 255, 0); }
+  50% { box-shadow: 0 0 14px 0 rgba(255, 165, 59, 0.25), 0 0 18px 4px rgba(79, 143, 255, 0.18); }
+}
+.prism-glow {
+  animation: prism-pulse 3.5s ease-in-out infinite;
+}
+
+/* Card lift — gentle hover */
+.card-lift {
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.card-lift:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-spotlight);
+  box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.45);
+}
+
+/* Button glow — primary gold */
+.btn-glow-gold {
+  transition: box-shadow 0.16s ease, background-color 0.16s ease, transform 0.06s ease;
+}
+.btn-glow-gold:hover:not(:disabled) {
+  box-shadow: 0 0 0 3px rgba(212, 166, 74, 0.2), 0 4px 16px -4px rgba(212, 166, 74, 0.35);
+}
+.btn-glow-gold:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+/* Button glow — secondary electric */
+.btn-glow-electric {
+  transition: box-shadow 0.16s ease, color 0.16s ease, transform 0.06s ease;
+}
+.btn-glow-electric:hover:not(:disabled) {
+  box-shadow: 0 0 0 3px rgba(79, 143, 255, 0.18);
+}
+.btn-glow-electric:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+/* Modal entrance — fade + slight rise */
+@keyframes modal-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-enter {
+  animation: modal-enter 0.18s ease-out;
+}
+
+/* Backdrop fade-in */
+@keyframes backdrop-enter {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to   { opacity: 1; backdrop-filter: blur(4px); }
+}
+.backdrop-enter {
+  animation: backdrop-enter 0.16s ease-out;
+}
+
+/* Page content fade-in (used per-route via React key) */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: page-enter 0.22s ease-out;
+}
+
+/* Sidebar nav active subtle glow */
+.nav-active-glow {
+  box-shadow: inset 2px 0 0 0 var(--color-gold), 0 0 12px -6px rgba(212, 166, 74, 0.4);
+}

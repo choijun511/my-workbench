@@ -113,7 +113,7 @@ export default function TodoPage() {
         </div>
         <button
           onClick={() => setShowAdd(!showAdd)}
-          className="px-4 py-2.5 bg-gold text-stage-deep rounded-lg text-sm font-medium hover:bg-gold/90 flex items-center gap-1.5"
+          className="px-4 py-2.5 bg-gold text-stage-deep btn-glow-gold rounded-lg text-sm font-medium hover:bg-gold/90 btn-glow-gold flex items-center gap-1.5"
         >
           <Plus size={16} /> 新建待办
         </button>
@@ -169,7 +169,7 @@ export default function TodoPage() {
               </button>
               <button
                 onClick={() => addTodo(false)}
-                className="px-4 py-1.5 bg-gold text-stage-deep rounded-lg text-sm hover:bg-gold/90"
+                className="px-4 py-1.5 bg-gold text-stage-deep btn-glow-gold rounded-lg text-sm hover:bg-gold/90"
               >
                 添加
               </button>
@@ -401,7 +401,7 @@ function TodoRow({
             ))}
           </div>
           <div className="ml-auto flex items-center gap-1">
-            <button onClick={save} className="px-3 py-1.5 text-xs bg-gold text-stage-deep rounded-md hover:bg-gold/90 flex items-center gap-1">
+            <button onClick={save} className="px-3 py-1.5 text-xs bg-gold text-stage-deep btn-glow-gold rounded-md hover:bg-gold/90 btn-glow-gold flex items-center gap-1">
               <Check size={12} /> 保存
             </button>
             <button onClick={() => setEditing(false)} className="px-2 py-1.5 text-xs text-haze hover:text-cream flex items-center gap-1">
@@ -414,7 +414,7 @@ function TodoRow({
   }
 
   return (
-    <div className={`flex items-center gap-3 bg-card rounded-xl border border-velvet px-5 py-4 group hover:border-spotlight transition-colors ${
+    <div className={`flex items-center gap-3 bg-card rounded-xl border border-velvet px-5 py-4 group card-lift ${
       todo.status === 'done' ? 'opacity-60' : ''
     }`}>
       <button

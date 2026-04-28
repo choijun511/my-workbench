@@ -208,7 +208,7 @@ export default function OKRPage() {
         <button
           onClick={addObjective}
           disabled={!effectiveProjectId || reachedLimit}
-          className="px-4 py-2 bg-gold text-stage-deep rounded-md text-sm font-medium hover:bg-gold/90 flex items-center gap-1.5 disabled:bg-slate-300 disabled:cursor-not-allowed"
+          className="px-4 py-2 bg-gold text-stage-deep btn-glow-gold rounded-md text-sm font-medium hover:bg-gold/90 btn-glow-gold flex items-center gap-1.5 disabled:bg-slate-300 disabled:cursor-not-allowed"
         >
           <Plus size={16} /> 添加
         </button>
@@ -499,7 +499,7 @@ function KRRow({ kr, onUpdate }: { kr: KeyResult; onUpdate: () => void }) {
             <button
               onClick={addLog}
               disabled={!newLog.trim()}
-              className="px-2.5 py-1.5 bg-gold text-stage-deep rounded-md text-xs hover:bg-gold/90 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center"
+              className="px-2.5 py-1.5 bg-gold text-stage-deep btn-glow-gold rounded-md text-xs hover:bg-gold/90 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center"
             >
               <Plus size={13} />
             </button>

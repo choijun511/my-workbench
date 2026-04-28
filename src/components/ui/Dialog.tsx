@@ -93,9 +93,9 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     <DialogContext.Provider value={{ confirm, prompt }}>
       {children}
       {req && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => close(req.kind === 'confirm' ? false : null)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm backdrop-enter" onClick={() => close(req.kind === 'confirm' ? false : null)}>
           <div
-            className="bg-card border border-velvet rounded-xl shadow-2xl w-full max-w-md grain"
+            className="bg-card border border-velvet rounded-xl shadow-2xl w-full max-w-md grain modal-enter"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between px-5 pt-4 pb-3 border-b border-velvet">
@@ -144,7 +144,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
                 className={`px-4 py-1.5 text-sm font-medium rounded ${
                   req.kind === 'confirm' && req.danger
                     ? 'bg-blood text-bone hover:bg-blood/90'
-                    : 'bg-gold text-stage-deep hover:bg-gold/90'
+                    : 'bg-gold text-stage-deep btn-glow-gold hover:bg-gold/90'
                 }`}
               >
                 {req.confirmLabel || '确定'}
@@ -183,9 +183,9 @@ export function Modal({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm backdrop-enter" onClick={onClose}>
       <div
-        className={`bg-card border border-velvet rounded-xl shadow-2xl w-full ${maxWidth} max-h-[85vh] flex flex-col grain`}
+        className={`bg-card border border-velvet rounded-xl shadow-2xl w-full ${maxWidth} max-h-[85vh] flex flex-col grain modal-enter`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-velvet">

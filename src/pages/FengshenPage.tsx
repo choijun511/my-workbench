@@ -69,7 +69,7 @@ export default function FengshenPage() {
         </div>
         <button
           onClick={() => setShowAdd(!showAdd)}
-          className="px-4 py-2.5 bg-gold text-stage-deep rounded-lg text-sm font-medium hover:bg-gold/90 flex items-center gap-1.5"
+          className="px-4 py-2.5 bg-gold text-stage-deep btn-glow-gold rounded-lg text-sm font-medium hover:bg-gold/90 btn-glow-gold flex items-center gap-1.5"
         >
           <Plus size={16} /> 添加看板
         </button>
@@ -98,7 +98,7 @@ export default function FengshenPage() {
               placeholder="描述（可选）"
               className="flex-1 px-4 py-2.5 text-sm border border-velvet rounded-lg focus:outline-none focus:ring-2 focus:ring-gold"
             />
-            <button onClick={addPanel} className="px-4 py-2.5 bg-gold text-stage-deep rounded-lg text-sm hover:bg-gold/90">
+            <button onClick={addPanel} className="px-4 py-2.5 bg-gold text-stage-deep btn-glow-gold rounded-lg text-sm hover:bg-gold/90">
               保存
             </button>
           </div>
@@ -470,7 +470,7 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
             <button
               onClick={submitText}
               disabled={!textBuffer.trim() || generating}
-              className="px-3 py-1.5 text-xs bg-gold text-stage-deep rounded-md hover:bg-gold/90 disabled:opacity-50 flex items-center gap-1"
+              className="px-3 py-1.5 text-xs bg-gold text-stage-deep btn-glow-gold rounded-md hover:bg-gold/90 disabled:opacity-50 flex items-center gap-1"
             >
               <Upload size={12} /> 分析这段文字
             </button>

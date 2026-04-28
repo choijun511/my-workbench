@@ -116,7 +116,7 @@ export default function DecisionsPage() {
         </div>
         <button
           onClick={() => setManualCapture(true)}
-          className="px-4 py-2.5 bg-gold text-stage-deep rounded-lg text-sm font-medium hover:bg-gold/90 flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
+          className="px-4 py-2.5 bg-gold text-stage-deep btn-glow-gold rounded-lg text-sm font-medium hover:bg-gold/90 btn-glow-gold flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
           title="新增决策（Cmd+K）"
         >
           <Plus size={16} /> 新增决策
@@ -204,8 +204,8 @@ function DecisionListItem({ d, active, onClick }: { d: Decision; active: boolean
   return (
     <div
       onClick={onClick}
-      className={`p-3 rounded-xl border cursor-pointer transition-all ${
-        active ? 'border-gold/50 bg-gold/10' : 'border-velvet bg-card hover:border-spotlight'
+      className={`p-3 rounded-xl border cursor-pointer card-lift ${
+        active ? 'border-gold/50 bg-gold/10 nav-active-glow' : 'border-velvet bg-card'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -252,8 +252,8 @@ function CaptureModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 backdrop-enter">
+      <div className="bg-card rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col grain modal-enter border border-velvet">
         <div className="px-5 py-3 border-b border-velvet flex items-center justify-between">
           <h2 className="text-base font-semibold text-bone flex items-center gap-2">
             <Sparkles size={16} className="text-electric" /> 新增决策
@@ -289,7 +289,7 @@ function CaptureModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
             <button
               onClick={submit}
               disabled={loading || !text.trim()}
-              className="px-4 py-1.5 bg-gold text-stage-deep rounded-md text-sm hover:bg-gold/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              className="px-4 py-1.5 bg-gold text-stage-deep btn-glow-gold rounded-md text-sm hover:bg-gold/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
               {loading ? '抽取中...' : '抽取并保存'}
@@ -766,7 +766,7 @@ function DecisionEditor({ d, onCancel, onSaved }: { d: Decision; onCancel: () =>
         <button onClick={onCancel} className="px-3 py-1.5 text-sm text-cream hover:text-bone flex items-center gap-1">
           <X size={13} /> 取消
         </button>
-        <button onClick={save} className="px-4 py-1.5 bg-gold text-stage-deep rounded-md text-sm hover:bg-gold/90 flex items-center gap-1">
+        <button onClick={save} className="px-4 py-1.5 bg-gold text-stage-deep btn-glow-gold rounded-md text-sm hover:bg-gold/90 btn-glow-gold flex items-center gap-1">
           <Check size={13} /> 保存
         </button>
       </div>
@@ -849,11 +849,12 @@ function RelatedRow({
 function StakeMeter({ d }: { d: Decision }) {
   const positive = d.judgment_score > 0;
   const pending = d.judgment_verdict === 'pending';
+  const bigBet = d.judgment_multiplier >= 18; // 押注规模大的高亮
 
   return (
     <div className="flex items-center gap-2 mt-3 flex-wrap text-[11px] font-mono">
       <span className="text-haze">赔率</span>
-      <span className="text-cream font-medium">{d.odds}×</span>
+      <span className={'font-medium ' + (d.odds > 1 ? 'text-gold' : 'text-cream')}>{d.odds}×</span>
       <span className="text-fog">·</span>
       <DotRow value={d.conviction} title={`确信 ${d.conviction}/3`} />
       <DotRow value={d.importance} title={`重要 ${d.importance}/3`} />
@@ -862,10 +863,10 @@ function StakeMeter({ d }: { d: Decision }) {
       <span className={
         'inline-flex items-center gap-1 px-2 py-0.5 rounded font-medium ' +
         (pending
-          ? 'bg-sunken text-haze'
+          ? bigBet ? 'bg-stage-deep text-bone prism-ring' : 'bg-sunken text-haze'
           : positive
-          ? 'bg-grass/20 text-grass'
-          : 'bg-blood/20 text-blood')
+          ? bigBet ? 'bg-stage-deep text-grass prism-ring prism-glow' : 'bg-grass/20 text-grass'
+          : bigBet ? 'bg-stage-deep text-blood prism-ring prism-glow' : 'bg-blood/20 text-blood')
       }>
         {pending ? `押注 ${d.judgment_multiplier}×` :
          (positive ? '+' : '') + d.judgment_score + ' 分'}
@@ -887,12 +888,18 @@ function DotRow({ value, title }: { value: number; title: string }) {
 function ScoreBadge({ score, subtitle }: { score: number; subtitle?: string }) {
   const positive = score > 0;
   const negative = score < 0;
+  const bigBet = Math.abs(score) >= 18; // big stakes = prism ring
+  const baseColor = positive ? 'text-grass' : negative ? 'text-blood' : 'text-haze';
+  const baseBg = bigBet
+    ? 'bg-stage-deep'
+    : positive ? 'bg-grass/10 border border-grass/40'
+      : negative ? 'bg-blood/10 border border-blood/30'
+      : 'bg-stage border border-velvet';
+
   return (
     <span className={
-      'inline-flex items-center gap-2 text-xs px-2 py-0.5 rounded-full ' +
-      (positive ? 'bg-grass/10 text-grass border border-grass/40' :
-       negative ? 'bg-blood/10 text-blood border border-blood/30' :
-       'bg-stage text-haze border border-velvet')
+      `inline-flex items-center gap-2 text-xs px-2 py-0.5 rounded-full ${baseColor} ${baseBg} ` +
+      (bigBet ? 'prism-ring' : '')
     }>
       <span className="font-mono font-semibold">
         {positive ? '+' : ''}{score} 分

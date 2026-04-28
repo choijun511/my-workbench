@@ -120,7 +120,7 @@ export default function Dashboard() {
 
 function Card({ title, titleIcon, linkTo, children }: { title: string; titleIcon?: React.ReactNode; linkTo?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-card rounded-xl border border-velvet p-5 grain">
+    <div className="bg-card rounded-xl border border-velvet p-5 grain card-lift">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-bone flex items-center gap-2 uppercase tracking-wider">
           {titleIcon} {title}
@@ -141,7 +141,7 @@ function StatCard({ icon: Icon, label, value, accent, subtitle }: { icon: any; l
     haze: 'bg-velvet text-haze',
   };
   return (
-    <div className="bg-card rounded-xl border border-velvet p-4 grain hover:border-spotlight transition-colors">
+    <div className="bg-card rounded-xl border border-velvet p-4 grain card-lift">
       <div className={`w-8 h-8 rounded-md flex items-center justify-center mb-3 ${accentMap[accent]}`}>
         <Icon size={16} />
       </div>
