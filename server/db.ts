@@ -149,6 +149,20 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_decisions_status_created ON decisions(status, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_decisions_review ON decisions(next_review_at) WHERE next_review_at IS NOT NULL AND status = 'active';
+
+  CREATE TABLE IF NOT EXISTS decision_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_id INTEGER NOT NULL REFERENCES decisions(id) ON DELETE CASCADE,
+    to_id INTEGER NOT NULL REFERENCES decisions(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,  -- related | extends | contradicts | supersedes | reverts
+    note TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(from_id, to_id, kind),
+    CHECK(from_id != to_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_decision_links_from ON decision_links(from_id);
+  CREATE INDEX IF NOT EXISTS idx_decision_links_to ON decision_links(to_id);
 `);
 
 export default db;

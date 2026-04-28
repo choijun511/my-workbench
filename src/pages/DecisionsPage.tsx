@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi';
-import type { Decision, DecisionStatus, DecisionRelated } from '../types';
+import type { Decision, DecisionStatus, DecisionRelated, DecisionLinks, DecisionLinkKind } from '../types';
 import {
   BookOpen,
   Plus,
@@ -153,7 +153,12 @@ export default function DecisionsPage() {
         </div>
         <div className="flex-1 min-w-0">
           {activeId ? (
-            <DecisionDetail key={activeId} id={activeId} onChange={refreshAll} />
+            <DecisionDetail
+              key={activeId}
+              id={activeId}
+              onChange={refreshAll}
+              onNavigate={(id) => setActiveId(id)}
+            />
           ) : (
             <div className="h-[400px] flex items-center justify-center text-slate-400 bg-white rounded-xl border border-slate-200">
               <div className="text-center">
@@ -270,12 +275,22 @@ function CaptureModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
   );
 }
 
-function DecisionDetail({ id, onChange }: { id: number; onChange: () => void }) {
+function DecisionDetail({
+  id,
+  onChange,
+  onNavigate,
+}: {
+  id: number;
+  onChange: () => void;
+  onNavigate: (id: number) => void;
+}) {
   const { data: d, refetch } = useApi<Decision>(`/api/decisions/${id}`);
+  const { data: links, refetch: refetchLinks } = useApi<DecisionLinks>(`/api/decisions/${id}/links`);
   const [editing, setEditing] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [related, setRelated] = useState<DecisionRelated[] | null>(null);
   const [loadingRelated, setLoadingRelated] = useState(false);
+  const [analyze, setAnalyze] = useState(false);
 
   useEffect(() => {
     setEditing(false);
@@ -288,12 +303,44 @@ function DecisionDetail({ id, onChange }: { id: number; onChange: () => void }) 
   const findRelated = async () => {
     setLoadingRelated(true);
     try {
-      const res = await fetch(`/api/decisions/${id}/find-related`, { method: 'POST' });
+      const res = await fetch(`/api/decisions/${id}/find-related`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ analyze, min_score: 0.45, top_k: 8 }),
+      });
       const data = await res.json();
       if (Array.isArray(data)) setRelated(data);
     } finally {
       setLoadingRelated(false);
     }
+  };
+
+  const createLink = async (toId: number, kind: DecisionLinkKind) => {
+    const res = await fetch(`/api/decisions/${id}/links`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to_id: toId, kind }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || '链接失败');
+      return;
+    }
+    await refetchLinks();
+    if (kind === 'supersedes' || kind === 'reverts') {
+      // status of linked decision changed; refresh list
+      onChange();
+    }
+    // Refresh related to reflect existing_link_kind
+    if (related) {
+      setRelated(related.map(r => r.id === toId ? { ...r, existing_link_kind: kind } : r));
+    }
+  };
+
+  const removeLink = async (linkId: number) => {
+    await apiDelete(`/api/decisions/links/${linkId}`);
+    await refetchLinks();
+    onChange();
   };
 
   const promote = async () => {
@@ -435,34 +482,92 @@ function DecisionDetail({ id, onChange }: { id: number; onChange: () => void }) 
         </div>
       </div>
 
-      {/* Related */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
-            <Link2 size={13} /> 相关决策
+      {/* Existing manual links */}
+      {links && (links.outgoing.length > 0 || links.incoming.length > 0) && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <h3 className="text-sm font-medium text-slate-700 flex items-center gap-1.5 mb-3">
+            <Link2 size={13} /> 已关联决策
           </h3>
-          <button
-            onClick={findRelated}
-            disabled={loadingRelated}
-            className="text-xs px-2.5 py-1 rounded-md border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1 disabled:opacity-50"
-          >
-            <RefreshCw size={11} className={loadingRelated ? 'animate-spin' : ''} />
-            {loadingRelated ? '搜索中...' : (related ? '重新搜索' : '查找相关')}
-          </button>
+          {links.outgoing.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1.5">本条 → 其他</p>
+              <ul className="space-y-1">
+                {links.outgoing.map(l => (
+                  <li key={l.link_id} className="group flex items-center gap-2 text-sm">
+                    <LinkKindBadge kind={l.kind} />
+                    <button
+                      onClick={() => onNavigate(l.id)}
+                      className="text-slate-700 hover:text-indigo-600 hover:underline truncate flex-1 text-left"
+                    >
+                      {l.title}
+                    </button>
+                    <button
+                      onClick={() => removeLink(l.link_id)}
+                      className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100"
+                      title="移除链接"
+                    >
+                      <X size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {links.incoming.length > 0 && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1.5">其他 → 本条</p>
+              <ul className="space-y-1">
+                {links.incoming.map(l => (
+                  <li key={l.link_id} className="flex items-center gap-2 text-sm">
+                    <LinkKindBadge kind={l.kind} />
+                    <button
+                      onClick={() => onNavigate(l.id)}
+                      className="text-slate-700 hover:text-indigo-600 hover:underline truncate flex-1 text-left"
+                    >
+                      {l.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Find related */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h3 className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+            <Sparkles size={13} className="text-indigo-500" /> 智能关联
+          </h3>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500 flex items-center gap-1 select-none cursor-pointer">
+              <input type="checkbox" checked={analyze} onChange={e => setAnalyze(e.target.checked)} className="cursor-pointer" />
+              AI 解释关系（更慢）
+            </label>
+            <button
+              onClick={findRelated}
+              disabled={loadingRelated}
+              className="text-xs px-2.5 py-1 rounded-md border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1 disabled:opacity-50"
+            >
+              <RefreshCw size={11} className={loadingRelated ? 'animate-spin' : ''} />
+              {loadingRelated ? '搜索中...' : (related ? '重新搜索' : '查找相关')}
+            </button>
+          </div>
         </div>
         {related === null ? (
-          <p className="text-xs text-slate-400">点右上"查找相关"通过 embedding 找语义近的历史决策</p>
+          <p className="text-xs text-slate-400">通过 embedding 找语义相近的历史决策；勾上"AI 解释关系"会让 Gemini 给每条候选标注 supersedes / contradicts / extends / related。</p>
         ) : related.length === 0 ? (
-          <p className="text-xs text-slate-400">没有找到相关决策</p>
+          <p className="text-xs text-slate-400">没有找到分数 ≥ 0.45 的相关决策</p>
         ) : (
-          <ul className="space-y-1.5">
+          <ul className="space-y-2">
             {related.map(r => (
-              <li key={r.id} className="flex items-center gap-2 text-sm">
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono">
-                  {Math.round(r.score * 100)}%
-                </span>
-                <span className="text-slate-700 truncate">{r.title}</span>
-              </li>
+              <RelatedRow
+                key={r.id}
+                row={r}
+                onNavigate={() => onNavigate(r.id)}
+                onLink={(kind) => createLink(r.id, kind)}
+              />
             ))}
           </ul>
         )}
@@ -570,6 +675,78 @@ function DecisionEditor({ d, onCancel, onSaved }: { d: Decision; onCancel: () =>
         </button>
       </div>
     </div>
+  );
+}
+
+const LINK_KIND_META: Record<DecisionLinkKind, { label: string; className: string }> = {
+  related: { label: '相关', className: 'bg-slate-100 text-slate-600' },
+  extends: { label: '延伸', className: 'bg-indigo-100 text-indigo-700' },
+  contradicts: { label: '冲突', className: 'bg-amber-100 text-amber-700' },
+  supersedes: { label: '替换', className: 'bg-emerald-100 text-emerald-700' },
+  reverts: { label: '推翻', className: 'bg-red-100 text-red-600' },
+};
+
+function LinkKindBadge({ kind }: { kind: DecisionLinkKind }) {
+  const meta = LINK_KIND_META[kind] || LINK_KIND_META.related;
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${meta.className} flex-shrink-0`}>
+      {meta.label}
+    </span>
+  );
+}
+
+function RelatedRow({
+  row,
+  onNavigate,
+  onLink,
+}: {
+  row: DecisionRelated;
+  onNavigate: () => void;
+  onLink: (kind: DecisionLinkKind) => void;
+}) {
+  const linked = !!row.existing_link_kind;
+  const suggestionMeta = row.suggested_kind && row.suggested_kind !== 'unrelated'
+    ? LINK_KIND_META[row.suggested_kind as DecisionLinkKind]
+    : null;
+
+  return (
+    <li className="border border-slate-100 rounded-lg p-2.5 hover:border-slate-200 group">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono flex-shrink-0">
+          {Math.round(row.score * 100)}%
+        </span>
+        {suggestionMeta && (
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${suggestionMeta.className} flex-shrink-0`}>
+            AI: {suggestionMeta.label}
+          </span>
+        )}
+        {linked && row.existing_link_kind && (
+          <span className="text-[10px] flex-shrink-0">
+            <LinkKindBadge kind={row.existing_link_kind} />
+          </span>
+        )}
+        <button onClick={onNavigate} className="text-sm text-slate-700 hover:text-indigo-600 hover:underline truncate flex-1 text-left">
+          {row.title}
+        </button>
+      </div>
+      {row.suggested_reason && (
+        <p className="text-[11px] text-slate-500 mt-1 ml-1">{row.suggested_reason}</p>
+      )}
+      {!linked && (
+        <div className="flex items-center gap-1 mt-2 ml-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
+          <span className="text-[10px] text-slate-400 mr-1">标记为：</span>
+          {(['related', 'extends', 'contradicts', 'supersedes', 'reverts'] as DecisionLinkKind[]).map(k => (
+            <button
+              key={k}
+              onClick={() => onLink(k)}
+              className={`text-[10px] px-1.5 py-0.5 rounded border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 ${LINK_KIND_META[k].className}`}
+            >
+              {LINK_KIND_META[k].label}
+            </button>
+          ))}
+        </div>
+      )}
+    </li>
   );
 }
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import db from '../db.js';
-import { extractDecision, embedText } from '../gemini.js';
+import { extractDecision, embedText, classifyRelationship } from '../gemini.js';
 
 const router = Router();
 
@@ -187,10 +187,14 @@ router.post('/:id/reflect', (req, res) => {
   res.json({ success: true });
 });
 
-// Find related decisions via embeddings (lazy)
+// Find related decisions via embeddings (lazy). Optionally classify relationship via LLM.
 router.post('/:id/find-related', async (req, res) => {
   const target = db.prepare(`SELECT * FROM decisions WHERE id = ?`).get(req.params.id) as any;
   if (!target) return res.status(404).json({ error: 'not found' });
+
+  const minScore = req.body?.min_score != null ? Number(req.body.min_score) : 0.45;
+  const topK = req.body?.top_k != null ? Number(req.body.top_k) : 8;
+  const analyze = !!req.body?.analyze; // when true, run LLM relationship classifier on top-K
 
   try {
     // Ensure target has an embedding
@@ -200,8 +204,8 @@ router.post('/:id/find-related', async (req, res) => {
       db.prepare(`UPDATE decisions SET embedding = ? WHERE id = ?`).run(JSON.stringify(targetVec), target.id);
     }
 
-    // Lazy-compute embeddings for any other decisions missing them
-    const others = db.prepare(`SELECT id, title, decision, context, embedding FROM decisions WHERE id != ?`)
+    // Lazy-compute embeddings for other decisions
+    const others = db.prepare(`SELECT id, title, decision, context, embedding, created_at FROM decisions WHERE id != ?`)
       .all(target.id) as any[];
     const updateStmt = db.prepare(`UPDATE decisions SET embedding = ? WHERE id = ?`);
     for (const o of others) {
@@ -211,25 +215,128 @@ router.post('/:id/find-related', async (req, res) => {
           updateStmt.run(JSON.stringify(v), o.id);
           o.embedding = JSON.stringify(v);
         } catch {
-          // skip on error; no embedding for this one this round
           continue;
         }
       }
     }
 
-    // Score
+    // Mark already-linked candidates so frontend can show link status
+    const existingLinks = db.prepare(`
+      SELECT to_id, kind FROM decision_links WHERE from_id = ?
+      UNION
+      SELECT from_id AS to_id, kind FROM decision_links WHERE to_id = ?
+    `).all(target.id, target.id) as Array<{ to_id: number; kind: string }>;
+    const linkedKinds = new Map<number, string>();
+    for (const l of existingLinks) linkedKinds.set(l.to_id, l.kind);
+
     const scored = others
       .map(o => {
         const v = safeJson<number[] | null>(o.embedding, null);
         if (!v) return null;
-        return { id: o.id, title: o.title, score: cosine(targetVec!, v) };
+        return {
+          id: o.id,
+          title: o.title,
+          decision: o.decision,
+          context: o.context,
+          created_at: o.created_at,
+          score: cosine(targetVec!, v),
+          existing_link_kind: linkedKinds.get(o.id) || null,
+        };
       })
-      .filter(Boolean) as Array<{ id: number; title: string; score: number }>;
+      .filter(Boolean) as Array<any>;
     scored.sort((a, b) => b.score - a.score);
-    res.json(scored.slice(0, 8));
+    const filtered = scored.filter(s => s.score >= minScore).slice(0, topK);
+
+    if (analyze) {
+      for (const cand of filtered) {
+        try {
+          const cls = await classifyRelationship(
+            { title: target.title, decision: target.decision, context: target.context, created_at: target.created_at },
+            { title: cand.title, decision: cand.decision, context: cand.context, created_at: cand.created_at }
+          );
+          cand.suggested_kind = cls.kind;
+          cand.suggested_reason = cls.reasoning;
+        } catch (e) {
+          cand.suggested_kind = null;
+          cand.suggested_reason = (e as Error).message;
+        }
+      }
+    }
+
+    // Strip large fields before returning
+    res.json(filtered.map(c => ({
+      id: c.id,
+      title: c.title,
+      score: c.score,
+      existing_link_kind: c.existing_link_kind,
+      suggested_kind: c.suggested_kind || null,
+      suggested_reason: c.suggested_reason || null,
+    })));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
+});
+
+// === Decision links ===
+
+const VALID_LINK_KINDS = ['related', 'extends', 'contradicts', 'supersedes', 'reverts'];
+
+// List links for a decision (both incoming and outgoing)
+router.get('/:id/links', (req, res) => {
+  const id = Number(req.params.id);
+  const outgoing = db.prepare(`
+    SELECT dl.id AS link_id, dl.kind, dl.note, dl.created_at, d.id, d.title, d.status
+    FROM decision_links dl
+    JOIN decisions d ON d.id = dl.to_id
+    WHERE dl.from_id = ?
+    ORDER BY dl.created_at DESC
+  `).all(id) as any[];
+  const incoming = db.prepare(`
+    SELECT dl.id AS link_id, dl.kind, dl.note, dl.created_at, d.id, d.title, d.status
+    FROM decision_links dl
+    JOIN decisions d ON d.id = dl.from_id
+    WHERE dl.to_id = ?
+    ORDER BY dl.created_at DESC
+  `).all(id) as any[];
+  res.json({ outgoing, incoming });
+});
+
+// Create link
+router.post('/:id/links', (req, res) => {
+  const fromId = Number(req.params.id);
+  const toId = Number(req.body?.to_id);
+  const kind = String(req.body?.kind || '');
+  const note = String(req.body?.note || '');
+  if (!toId || fromId === toId) return res.status(400).json({ error: 'invalid to_id' });
+  if (!VALID_LINK_KINDS.includes(kind)) return res.status(400).json({ error: 'invalid kind' });
+
+  const target = db.prepare(`SELECT id FROM decisions WHERE id = ?`).get(toId);
+  if (!target) return res.status(404).json({ error: 'target not found' });
+
+  try {
+    const tx = db.transaction(() => {
+      const info = db.prepare(`INSERT OR IGNORE INTO decision_links (from_id, to_id, kind, note) VALUES (?, ?, ?, ?)`)
+        .run(fromId, toId, kind, note);
+      // If marking 'supersedes', also flip target.status to superseded
+      if (kind === 'supersedes' && info.changes > 0) {
+        db.prepare(`UPDATE decisions SET status = 'superseded', updated_at = datetime('now') WHERE id = ?`).run(toId);
+      }
+      // If marking 'reverts', flip target to reverted
+      if (kind === 'reverts' && info.changes > 0) {
+        db.prepare(`UPDATE decisions SET status = 'reverted', updated_at = datetime('now') WHERE id = ?`).run(toId);
+      }
+    });
+    tx();
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+// Delete link
+router.delete('/links/:linkId', (req, res) => {
+  db.prepare(`DELETE FROM decision_links WHERE id = ?`).run(req.params.linkId);
+  res.json({ success: true });
 });
 
 // Decisions due for review (verify follow-up window has elapsed)

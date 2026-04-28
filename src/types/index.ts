@@ -135,8 +135,29 @@ export interface Decision {
   updated_at: string;
 }
 
+export type DecisionLinkKind = 'related' | 'extends' | 'contradicts' | 'supersedes' | 'reverts';
+export type SuggestedLinkKind = DecisionLinkKind | 'unrelated';
+
 export interface DecisionRelated {
   id: number;
   title: string;
   score: number;
+  existing_link_kind: DecisionLinkKind | null;
+  suggested_kind: SuggestedLinkKind | null;
+  suggested_reason: string | null;
+}
+
+export interface DecisionLinkRow {
+  link_id: number;
+  kind: DecisionLinkKind;
+  note: string;
+  created_at: string;
+  id: number;       // linked decision id
+  title: string;    // linked decision title
+  status: string;
+}
+
+export interface DecisionLinks {
+  outgoing: DecisionLinkRow[];
+  incoming: DecisionLinkRow[];
 }

@@ -301,9 +301,66 @@ export async function extractDecision(rawText: string, sourceTool?: string, sour
   };
 }
 
+export interface RelationshipClassification {
+  kind: 'related' | 'extends' | 'contradicts' | 'supersedes' | 'unrelated';
+  reasoning: string;
+}
+
+export async function classifyRelationship(
+  target: { title: string; decision: string; context: string; created_at: string },
+  candidate: { title: string; decision: string; context: string; created_at: string }
+): Promise<RelationshipClassification> {
+  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY 未配置');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`;
+  const prompt = `判断两条决策之间的关系。
+
+决策 A（新，时间 ${target.created_at}）：
+标题：${target.title}
+决策：${target.decision}
+背景：${target.context}
+
+决策 B（旧，时间 ${candidate.created_at}）：
+标题：${candidate.title}
+决策：${candidate.decision}
+背景：${candidate.context}
+
+返回 kind + reasoning：
+- "supersedes": A 替换/否定了 B（明确推翻 B 的核心结论或方案）
+- "contradicts": A 与 B 在某些点上冲突，但没有完全替代关系（同一系统内做了相反的取舍）
+- "extends": A 是在 B 的基础上做的进一步细化/扩展（同方向，更深一步）
+- "related": 主题相关但没有直接的因果/替代/扩展关系
+- "unrelated": 主题不同，embedding 相似只是巧合
+
+reasoning：1 句中文解释你为什么这么判断（≤40 字）`;
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          kind: { type: 'STRING' },
+          reasoning: { type: 'STRING' },
+        },
+        required: ['kind', 'reasoning'],
+      },
+      temperature: 0.1,
+    },
+  };
+  const data = await callWithRetry(url, body);
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const parsed = JSON.parse(text);
+  const validKinds = ['related', 'extends', 'contradicts', 'supersedes', 'unrelated'];
+  return {
+    kind: validKinds.includes(parsed.kind) ? parsed.kind : 'related',
+    reasoning: parsed.reasoning || '',
+  };
+}
+
 export async function embedText(text: string): Promise<number[]> {
   if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY 未配置');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${env.GEMINI_API_KEY}`;
+  const model = process.env.GEMINI_EMBED_MODEL || 'gemini-embedding-001';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${env.GEMINI_API_KEY}`;
   const body = { content: { parts: [{ text }] } };
   const res = await fetch(url, {
     method: 'POST',
