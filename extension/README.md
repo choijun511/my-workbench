@@ -1,14 +1,17 @@
 # My Workbench Capture (Chrome Extension)
 
-A tiny browser extension that lets [my-workbench](https://my-workbench.onrender.com) capture the active tab so its AI Insight feature can auto-analyze the dashboard you're viewing — no manual screenshots, no permission popups, no tab-share prompts.
+A tiny browser extension that adds two capabilities to [my-workbench](https://my-workbench.onrender.com):
+
+1. **Auto AI Insight on dashboards** — when you view a 风神 panel inside my-workbench, the extension takes a full-page screenshot (via `chrome.debugger`) and feeds it to Gemini for an automatic insight, no permission popups.
+2. **One-click decision capture from any AI chat** — highlight a stretch of conversation on claude.ai / chatgpt.com / gemini.google.com / anywhere, press **Alt+Shift+D** (or click the extension icon), and it gets POSTed to my-workbench, structured by Gemini, and saved as a decision record.
 
 ## How it works
 
-1. The extension listens for `postMessage` requests from `my-workbench.onrender.com` (or `localhost:5173` in dev).
-2. When my-workbench asks for a capture, the extension's service worker calls `chrome.tabs.captureVisibleTab()` and returns a base64 JPEG.
-3. my-workbench posts the image to its backend, which runs Gemini and stores the insight.
+**Insight path**: my-workbench `postMessage` → content script → service worker `chrome.debugger` → returns base64 JPEG → my-workbench → Gemini.
 
-The extension never sends data anywhere itself — it only hands the screenshot back to the my-workbench tab that asked for it.
+**Decision path**: hotkey/icon → service worker → `chrome.scripting.executeScript` reads `window.getSelection()` from the active tab → POST to `https://my-workbench.onrender.com/api/decisions/capture` → toast renders in the source page with title + confidence + a link to your decisions list.
+
+The extension never stores or transmits data on its own — it's just a transport between the active tab and your my-workbench backend.
 
 ## Install (developer mode)
 
@@ -22,12 +25,11 @@ When the extension is updated (e.g. after `git pull`), click the reload icon on 
 
 ## Permissions explained
 
-- `tabs` + `host_permissions: ["<all_urls>"]`: Chrome's `captureVisibleTab` requires either `<all_urls>` or `activeTab` — even per-origin host_permissions are refused.
-- `debugger`: needed for `Page.captureScreenshot` with `captureBeyondViewport:true`, which grabs the full document height (not just the visible viewport). While the extension is capturing, Chrome shows a yellow "扩展正在调试此浏览器" banner; it disappears as soon as the screenshot returns (a few hundred ms). The extension detaches the debugger after every capture.
+- `tabs` + `host_permissions: ["<all_urls>"]`: Chrome's `captureVisibleTab` requires either `<all_urls>` or `activeTab`, and decision capture needs to read `window.getSelection()` on whichever tab you're on.
+- `scripting`: lets the service worker inject a one-off snippet to read the selection and render the toast.
+- `debugger`: only used for full-page screenshots of dashboards. Triggers the yellow "扩展正在调试此浏览器" banner for a few hundred ms; the extension detaches as soon as the screenshot returns.
 
-In practice the extension only ever captures while you are on my-workbench because the content script (the only thing that asks for captures) is restricted to `my-workbench.onrender.com` / `localhost:5173`.
-
-No analytics, no storage, no remote calls of its own.
+In practice the extension only acts on a tab when **you** click its icon, press the shortcut, or are interacting with my-workbench. No analytics, no storage, no remote calls of its own.
 
 ## Files
 
