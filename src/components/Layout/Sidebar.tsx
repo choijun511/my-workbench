@@ -1,26 +1,30 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Target, CheckSquare, BarChart3, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Target, CheckSquare, BarChart3, BookOpen, Bot } from 'lucide-react';
 import { useApi } from '../../hooks/useApi';
-import type { Todo, DecisionStats } from '../../types';
+import type { Todo, DecisionStats, AgentStats } from '../../types';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '工作台', shortcut: 'h' },
   { to: '/okr', icon: Target, label: 'OKR', shortcut: 'o' },
   { to: '/todo', icon: CheckSquare, label: '待办事项', shortcut: 't', badgeKey: 'todos-urgent' },
   { to: '/decisions', icon: BookOpen, label: '决策', shortcut: 'd', badgeKey: 'decisions-due' },
+  { to: '/agents', icon: Bot, label: 'Agent', shortcut: 'a', badgeKey: 'agents-running' },
   { to: '/fengshen', icon: BarChart3, label: '风神看板', shortcut: 'f' },
 ];
 
 export default function Sidebar() {
   const { data: todos } = useApi<Todo[]>('/api/todos?status=todo');
   const { data: decisionStats } = useApi<DecisionStats>('/api/decisions/stats');
+  const { data: agentStats } = useApi<AgentStats>('/api/agents/stats');
 
   const urgentTodos = todos?.filter(t => t.priority === 'P0' || t.priority === 'P1').length || 0;
   const dueDecisions = decisionStats?.due_for_review ?? 0;
+  const runningAgents = agentStats?.running ?? 0;
 
-  const badges: Record<string, number> = {
-    'todos-urgent': urgentTodos,
-    'decisions-due': dueDecisions,
+  const badges: Record<string, { count: number; tone: 'blood' | 'electric' | 'gold' }> = {
+    'todos-urgent': { count: urgentTodos, tone: 'blood' },
+    'decisions-due': { count: dueDecisions, tone: 'blood' },
+    'agents-running': { count: runningAgents, tone: 'electric' },
   };
 
   return (
@@ -31,7 +35,7 @@ export default function Sidebar() {
       </div>
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {navItems.map(({ to, icon: Icon, label, badgeKey }) => {
-          const badge = badgeKey ? badges[badgeKey] || 0 : 0;
+          const badge = badgeKey ? badges[badgeKey] : null;
           return (
             <NavLink
               key={to}
@@ -47,9 +51,13 @@ export default function Sidebar() {
             >
               <Icon size={17} />
               <span className="flex-1">{label}</span>
-              {badge > 0 && (
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blood/15 text-blood">
-                  {badge}
+              {badge && badge.count > 0 && (
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                  badge.tone === 'blood' ? 'bg-blood/15 text-blood' :
+                  badge.tone === 'electric' ? 'bg-electric/15 text-electric' :
+                  'bg-gold/15 text-gold'
+                }`}>
+                  {badge.count}
                 </span>
               )}
             </NavLink>

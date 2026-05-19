@@ -27,6 +27,7 @@ export default function AppLayout() {
           else if (k === 'o') navigate('/okr');
           else if (k === 't') navigate('/todo');
           else if (k === 'd') navigate('/decisions');
+          else if (k === 'a') navigate('/agents');
           else if (k === 'f') navigate('/fengshen');
         };
         window.addEventListener('keydown', onSecond, true);

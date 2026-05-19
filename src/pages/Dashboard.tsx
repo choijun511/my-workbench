@@ -1,6 +1,6 @@
 import { useApi } from '../hooks/useApi';
-import type { Objective, Todo, Decision, DecisionStats } from '../types';
-import { Target, CheckSquare, TrendingUp, AlertCircle, BookOpen } from 'lucide-react';
+import type { Objective, Todo, Decision, DecisionStats, Agent, AgentStats } from '../types';
+import { Target, CheckSquare, TrendingUp, AlertCircle, BookOpen, Bot } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 function getCurrentQuarter() {
@@ -15,6 +15,8 @@ export default function Dashboard() {
   const { data: todos } = useApi<Todo[]>('/api/todos?status=todo');
   const { data: decisionStats } = useApi<DecisionStats>('/api/decisions/stats');
   const { data: dueDecisions } = useApi<Decision[]>('/api/decisions/review/due');
+  const { data: agentStats } = useApi<AgentStats>('/api/agents/stats');
+  const { data: agents } = useApi<Agent[]>('/api/agents');
 
   const avgProgress = objectives?.length
     ? Math.round(objectives.reduce((s, o) => s + o.progress, 0) / objectives.length)
@@ -22,6 +24,10 @@ export default function Dashboard() {
   const urgentTodos = todos?.filter(t => t.priority === 'P0' || t.priority === 'P1') || [];
   const dueCount = decisionStats?.due_for_review ?? 0;
   const totalScore = decisionStats?.judgment.total_score ?? 0;
+  const runningAgents = agentStats?.running ?? 0;
+  const errorAgents = agentStats?.error ?? 0;
+  const staleAgents = agentStats?.stale ?? 0;
+  const activeAgents = agents?.filter(a => a.status === 'running' || a.status === 'error') ?? [];
 
   return (
     <div className="max-w-screen-2xl">
@@ -31,13 +37,24 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 2xl:gap-5 mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 2xl:gap-5 mb-10">
         <StatCard icon={Target} label="OKR 目标" value={String(objectives?.length || 0)} accent="electric" />
         <StatCard icon={TrendingUp} label="整体进度" value={`${avgProgress}%`} accent="grass" />
         <StatCard icon={CheckSquare} label="待办事项" value={String(todos?.length || 0)} accent="electric" />
         <StatCard icon={AlertCircle} label="紧急任务" value={String(urgentTodos.length)} accent={urgentTodos.length > 0 ? 'blood' : 'haze'} />
         <StatCard icon={BookOpen} label="待复盘" value={String(dueCount)} accent={dueCount > 0 ? 'gold' : 'haze'}
           subtitle={totalScore !== 0 ? `判断力 ${totalScore > 0 ? '+' : ''}${totalScore}` : undefined} />
+        <StatCard
+          icon={Bot}
+          label="Agent"
+          value={String(runningAgents)}
+          accent={errorAgents > 0 ? 'blood' : runningAgents > 0 ? 'electric' : 'haze'}
+          subtitle={
+            errorAgents > 0 ? `${errorAgents} 出错`
+              : staleAgents > 0 ? `${staleAgents} 失联`
+              : agentStats && agentStats.total > 0 ? `共 ${agentStats.total} 个` : '尚未接入'
+          }
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-5">
@@ -87,6 +104,29 @@ export default function Dashboard() {
           )}
         </Card>
 
+        {/* Agents status panel */}
+        <Card title="Agent 状态" linkTo="/agents" titleIcon={<Bot size={15} />}>
+          {!agents?.length ? (
+            <p className="text-sm text-haze py-4">尚未接入任何 Agent · 去 <Link to="/agents" className="text-electric hover:underline">接入一个</Link></p>
+          ) : activeAgents.length === 0 ? (
+            <p className="text-sm text-haze py-4">所有 Agent 当前空闲 🌙</p>
+          ) : (
+            <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+              {activeAgents.slice(0, 8).map(a => (
+                <Link
+                  key={a.id}
+                  to="/agents"
+                  className="flex items-center gap-3 py-2 px-2 rounded-md hover:bg-sunken/60 group"
+                >
+                  <AgentStatusDot status={a.status} stale={a.stale} />
+                  <span className="text-sm text-cream truncate flex-1 group-hover:text-bone">{a.name}</span>
+                  {a.current_task && <span className="text-[11px] text-haze truncate max-w-[40%]">{a.current_task}</span>}
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
+
         {/* Decisions due for review */}
         <Card title="待复盘决策" linkTo="/decisions" titleIcon={<BookOpen size={15} />}>
           {!dueDecisions?.length ? (
@@ -116,6 +156,16 @@ export default function Dashboard() {
       </div>
     </div>
   );
+}
+
+function AgentStatusDot({ status, stale }: { status: string; stale: boolean }) {
+  const color =
+    status === 'running' && !stale ? 'bg-electric animate-pulse' :
+    status === 'running' && stale ? 'bg-gold' :
+    status === 'error' ? 'bg-blood' :
+    status === 'disabled' ? 'bg-fog' :
+    'bg-haze';
+  return <span className={`w-2 h-2 rounded-full flex-shrink-0 ${color}`} />;
 }
 
 function Card({ title, titleIcon, linkTo, children }: { title: string; titleIcon?: React.ReactNode; linkTo?: string; children: React.ReactNode }) {

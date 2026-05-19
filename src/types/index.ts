@@ -192,3 +192,32 @@ export interface DecisionLinks {
   outgoing: DecisionLinkRow[];
   incoming: DecisionLinkRow[];
 }
+
+export type AgentKind = 'claude-code' | 'feishu-bot' | 'cron' | 'webhook' | 'custom';
+export type AgentStatus = 'idle' | 'running' | 'error' | 'disabled';
+
+export interface Agent {
+  id: number;
+  name: string;
+  kind: AgentKind;
+  description: string;
+  status: AgentStatus;
+  current_task: string;
+  last_message: string;
+  last_heartbeat_at: string | null;
+  config: Record<string, any>;
+  endpoint_url: string;
+  stale: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentStats {
+  counts: Record<string, number>;
+  running: number;
+  idle: number;
+  error: number;
+  disabled: number;
+  stale: number;
+  total: number;
+}

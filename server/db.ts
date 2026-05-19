@@ -186,6 +186,23 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_decision_links_from ON decision_links(from_id);
   CREATE INDEX IF NOT EXISTS idx_decision_links_to ON decision_links(to_id);
+
+  CREATE TABLE IF NOT EXISTS agents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'custom',         -- claude-code | feishu-bot | cron | webhook | custom
+    description TEXT DEFAULT '',
+    status TEXT DEFAULT 'idle',                  -- idle | running | error | disabled
+    current_task TEXT DEFAULT '',                -- what it's doing right now (one line)
+    last_message TEXT DEFAULT '',                -- last log line / status message
+    last_heartbeat_at TEXT,                      -- last time the agent pinged
+    config TEXT DEFAULT '{}',                    -- JSON
+    endpoint_url TEXT DEFAULT '',                -- optional pingable URL
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 `);
 
 export default db;

@@ -6,6 +6,7 @@ import OKRPage from './pages/OKRPage';
 import TodoPage from './pages/TodoPage';
 import FengshenPage from './pages/FengshenPage';
 import DecisionsPage from './pages/DecisionsPage';
+import AgentsPage from './pages/AgentsPage';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="/todo" element={<TodoPage />} />
             <Route path="/fengshen" element={<FengshenPage />} />
             <Route path="/decisions" element={<DecisionsPage />} />
+          <Route path="/agents" element={<AgentsPage />} />
           </Route>
         </Routes>
       </DialogProvider>
