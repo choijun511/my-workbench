@@ -224,6 +224,9 @@ export default function FengshenPage() {
   );
 }
 
+const DEFAULT_CAPTURE_WAIT_SEC = 6;
+const RETRY_CAPTURE_WAIT_SEC = 15;
+
 function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
   const { data: insights, refetch } = useApi<PanelInsight[]>(`/api/fengshen/${panel.id}/insights`);
   const [generating, setGenerating] = useState(false);
@@ -233,6 +236,8 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
   const [textBuffer, setTextBuffer] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [autoTriedFor, setAutoTriedFor] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState<number>(0); // seconds left until auto-capture
+  const cancelCountdownRef = useRef<{ canceled: boolean } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const ext = useExtensionCapture();
@@ -335,13 +340,28 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
     refetch();
   };
 
-  const captureViaExtension = async () => {
+  // Capture flow: countdown → screenshot → upload → analyze.
+  // The countdown gives 风神 panels time to render their async data inside the iframe.
+  // User can shortcut via "立即截图" or extend via "再多等一会" if visibility=none.
+  const captureViaExtension = async (waitSec: number = DEFAULT_CAPTURE_WAIT_SEC) => {
     if (!ext.available) return;
-    setGenerating(true);
     setErrorMsg(null);
+
+    // Start a cancelable countdown
+    const ctl = { canceled: false };
+    cancelCountdownRef.current = ctl;
+    setCountdown(waitSec);
+    for (let s = waitSec; s > 0; s--) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(r => setTimeout(r, 1000));
+      if (ctl.canceled) break;
+      setCountdown(s - 1);
+    }
+    setCountdown(0);
+    cancelCountdownRef.current = null;
+
+    setGenerating(true);
     try {
-      // Wait for the iframe to render before capturing.
-      await new Promise(r => setTimeout(r, 1500));
       const r = await ext.capture();
       if (!r) {
         setErrorMsg(ext.lastError || '截图失败');
@@ -353,11 +373,34 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
     }
   };
 
-  // Reset text-input expander when panel changes
+  const cancelCountdown = () => {
+    if (cancelCountdownRef.current) cancelCountdownRef.current.canceled = true;
+    setCountdown(0);
+  };
+
+  const captureNow = async () => {
+    cancelCountdown();
+    setGenerating(true);
+    setErrorMsg(null);
+    try {
+      const r = await ext.capture();
+      if (!r) {
+        setErrorMsg(ext.lastError || '截图失败');
+        return;
+      }
+      await sendInsight({ image_base64: r.image_base64, image_mime: r.image_mime });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Reset state when panel changes
   useEffect(() => {
     setShowTextInput(false);
     setTextBuffer('');
     setErrorMsg(null);
+    cancelCountdown();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel.id]);
 
   // Auto-capture once per panel per session, when extension is available and
@@ -371,7 +414,7 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
       return;
     }
     setAutoTriedFor(panel.id);
-    captureViaExtension();
+    captureViaExtension(DEFAULT_CAPTURE_WAIT_SEC);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ext.available, insights, panel.id, hasTodayInsight]);
 
@@ -393,16 +436,36 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {generating && (
+          {countdown > 0 && (
+            <>
+              <span className="text-xs text-haze flex items-center gap-1">
+                <RefreshCw size={11} className="animate-spin" /> 等看板加载 {countdown}s...
+              </span>
+              <button
+                onClick={captureNow}
+                className="text-xs px-2.5 py-1 rounded-md border border-gold/40 bg-card text-gold hover:bg-gold/10 btn-glow-gold"
+                title="跳过等待，立即截图"
+              >
+                立即截图
+              </button>
+              <button
+                onClick={cancelCountdown}
+                className="text-xs px-2 py-1 text-haze hover:text-cream"
+              >
+                取消
+              </button>
+            </>
+          )}
+          {generating && countdown === 0 && (
             <span className="text-xs text-gold flex items-center gap-1">
               <RefreshCw size={12} className="animate-spin" /> 分析中...
             </span>
           )}
-          {ext.available && !generating && (
+          {ext.available && !generating && countdown === 0 && (
             <button
-              onClick={captureViaExtension}
-              className="text-xs px-2.5 py-1 rounded-md border border-gold/40 bg-card text-gold hover:bg-gold/10 flex items-center gap-1"
-              title="重新截图分析当前看板"
+              onClick={() => captureViaExtension(DEFAULT_CAPTURE_WAIT_SEC)}
+              className="text-xs px-2.5 py-1 rounded-md border border-gold/40 bg-card text-gold hover:bg-gold/10 btn-glow-gold flex items-center gap-1"
+              title={`等 ${DEFAULT_CAPTURE_WAIT_SEC}s 后截图分析当前看板`}
             >
               <RefreshCw size={11} /> 重新截图
             </button>
@@ -485,6 +548,61 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
 
         {latestResult ? (
           <div className="pt-2 space-y-3">
+            {/* Visibility banner — fires when Gemini didn't see real data */}
+            {latestResult.data_visibility !== 'full' && (
+              <div className={`flex items-start gap-2 px-3 py-2 rounded-md border text-xs ${
+                latestResult.data_visibility === 'none'
+                  ? 'bg-blood/10 border-blood/30 text-blood'
+                  : 'bg-gold/10 border-gold/30 text-gold'
+              }`}>
+                <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <span className="font-medium">
+                    {latestResult.data_visibility === 'none' ? '没看到看板数据' : '只看到部分数据'}
+                  </span>
+                  {latestResult.visibility_reason && (
+                    <span className="text-haze ml-2">— {latestResult.visibility_reason}</span>
+                  )}
+                  <span className="text-haze block mt-0.5">
+                    可能截图时看板还没加载完。
+                  </span>
+                </div>
+                {ext.available && (
+                  <button
+                    onClick={() => captureViaExtension(RETRY_CAPTURE_WAIT_SEC)}
+                    disabled={generating || countdown > 0}
+                    className="text-xs px-2 py-1 rounded border border-current hover:bg-card disabled:opacity-50 whitespace-nowrap"
+                    title={`再多等 ${RETRY_CAPTURE_WAIT_SEC}s 重新截图`}
+                  >
+                    再等 {RETRY_CAPTURE_WAIT_SEC}s 重试
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Observed metrics — what Gemini actually saw */}
+            {latestResult.observed_metrics?.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-haze mb-1.5 uppercase tracking-wider">看到的数据</h4>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
+                  {latestResult.observed_metrics.map((m, i) => (
+                    <div key={i} className="bg-sunken/50 rounded px-2 py-1.5">
+                      <div className="text-[10px] text-haze truncate">{m.name}</div>
+                      <div className="text-sm text-bone font-mono font-medium truncate">{m.value}</div>
+                      {m.comparison && (
+                        <div className={`text-[10px] font-mono truncate ${
+                          /\+|↑|增|涨|升/.test(m.comparison) ? 'text-grass' :
+                          /-|↓|降|跌|减/.test(m.comparison) ? 'text-blood' : 'text-haze'
+                        }`}>
+                          {m.comparison}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {latestResult.summary && (
               <p className="text-sm text-cream leading-relaxed">{latestResult.summary}</p>
             )}
@@ -529,7 +647,9 @@ function PanelInsightCard({ panel }: { panel: FengshenPanel }) {
         ) : (
           <p className="text-xs text-haze pt-1">
             {ext.available
-              ? '已自动开始截图分析当前看板...'
+              ? (countdown > 0
+                  ? `等看板加载完毕，${countdown} 秒后自动截图...`
+                  : generating ? '正在分析...' : '已自动开始截图分析当前看板...')
               : <>截一张看板的图（{navigator.platform.includes('Mac') ? 'Cmd+Shift+4' : 'Win+Shift+S'}），回到这里按 ⌘V 粘贴即可。装上 <a className="text-electric hover:underline" href="https://github.com/choijun511/my-workbench/tree/main/extension" target="_blank" rel="noreferrer">Chrome 扩展</a> 之后能自动截图。</>}
           </p>
         )}

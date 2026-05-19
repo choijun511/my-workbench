@@ -81,8 +81,17 @@ export interface PanelInsightAnomaly {
   observation: string;
   severity: 'high' | 'medium' | 'low';
 }
+export interface PanelObservedMetric {
+  name: string;
+  value: string;
+  comparison: string;
+}
+export type PanelDataVisibility = 'full' | 'partial' | 'none';
 
 export interface PanelInsightResult {
+  data_visibility: PanelDataVisibility;
+  visibility_reason: string;
+  observed_metrics: PanelObservedMetric[];
   summary: string;
   anomalies: PanelInsightAnomaly[];
   insights: string[];

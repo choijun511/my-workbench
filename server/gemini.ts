@@ -74,25 +74,37 @@ interface PanelAnalysisInput {
 }
 
 export interface PanelAnalysisResult {
+  data_visibility: 'full' | 'partial' | 'none';
+  visibility_reason: string;
+  observed_metrics: Array<{ name: string; value: string; comparison: string }>;
   summary: string;
   anomalies: Array<{ metric: string; observation: string; severity: 'high' | 'medium' | 'low' }>;
   insights: string[];
   generated_at: string;
 }
 
-const PANEL_PROMPT = `你是一名数据分析师，正在帮用户分析一份内部业务看板的当日快照。
+const PANEL_PROMPT = `你是一名数据分析师，正在帮用户分析一份内部业务看板的当日快照（截图或文字）。
 
-请基于看板的图片或文字描述，输出三类内容：
-1. summary：一句话概括今日整体表现（中文，30-80 字）
-2. anomalies：异常数据提醒（环比/同比/历史均值偏离、突增突降、断崖、归零等）。每条包含 metric（指标名）、observation（中文描述偏离方向和幅度）、severity（high/medium/low）。如果没有明显异常，返回空数组。
-3. insights：关键数据洞察（不只是描述数字，要给出业务含义或行动建议），3-5 条，每条 1-2 句话，中文。
+**输出之前先回答两个判断**：
+1. data_visibility: 你能看到多少有效数据？
+   - "full"  = 看到完整的指标 + 数值 + 时间窗
+   - "partial" = 只看到一部分（图加载到一半、只渲染了标题、某些卡片是空的）
+   - "none" = 看不到任何业务数据（截图是空白页/loading骨架/登录页/纯导航）
+2. visibility_reason: 一句话说明你为什么这么判断（中文，≤30 字）
 
-要求：
-- 只基于图片/文字中真实存在的数据，不要编造
-- 数值精度尊重原图，不要四舍五入丢失信息
-- 严禁泛泛而谈（"建议关注趋势"这种废话不要）
+**只有 visibility 不是 "none" 时才填以下字段**（none 时全部留空数组/空字符串）：
+- observed_metrics: 你**实际看到**的关键指标列表，每个对象 { name (指标名), value (数值，原样保留单位), comparison (环比/同比/与往日，如果图里有；没有就空字符串) }。这是你"打卡"看到了什么的依据，至少 3 条，最多 12 条。
+- summary: 一句话概括今日整体表现（30-80 字，中文）
+- anomalies: 异常数据提醒。环比/同比/历史均值显著偏离、突增突降、断崖、归零等。每条 { metric, observation (中文描述偏离方向和幅度), severity (high/medium/low) }。没明显异常就空数组。
+- insights: 关键数据洞察 3-5 条，每条 1-2 句中文。**不要写"建议关注 X"这种空话**——必须要么解释数字背后的业务含义，要么给出可执行的行动建议。
 
-返回 JSON: { "summary": "...", "anomalies": [...], "insights": [...] }`;
+**严格要求**：
+- 不要编造任何 observed_metrics 没列出的数字
+- 数值精度尊重原图（不要把 12,345 简化成 12k）
+- 如果整张图就是 loading / blank / 登录页 → 老老实实给 "none" + 空字段，不要硬凑 insights
+- 截图字太小看不清的指标也算 partial，可以列你能确认的部分
+
+返回 JSON 严格遵守 schema。`;
 
 export async function analyzePanelData(input: PanelAnalysisInput): Promise<PanelAnalysisResult> {
   if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY 未配置');
@@ -117,6 +129,20 @@ export async function analyzePanelData(input: PanelAnalysisInput): Promise<Panel
       responseSchema: {
         type: 'OBJECT',
         properties: {
+          data_visibility: { type: 'STRING' },
+          visibility_reason: { type: 'STRING' },
+          observed_metrics: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                name: { type: 'STRING' },
+                value: { type: 'STRING' },
+                comparison: { type: 'STRING' },
+              },
+              required: ['name', 'value', 'comparison'],
+            },
+          },
           summary: { type: 'STRING' },
           anomalies: {
             type: 'ARRAY',
@@ -132,16 +158,29 @@ export async function analyzePanelData(input: PanelAnalysisInput): Promise<Panel
           },
           insights: { type: 'ARRAY', items: { type: 'STRING' } },
         },
-        required: ['summary', 'anomalies', 'insights'],
+        required: [
+          'data_visibility',
+          'visibility_reason',
+          'observed_metrics',
+          'summary',
+          'anomalies',
+          'insights',
+        ],
       },
-      temperature: 0.3,
+      temperature: 0.2,
     },
   };
 
   const data = await callWithRetry(url, body);
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   const parsed = JSON.parse(text);
+  const visibility = ['full', 'partial', 'none'].includes(parsed.data_visibility)
+    ? parsed.data_visibility
+    : 'partial';
   return {
+    data_visibility: visibility,
+    visibility_reason: parsed.visibility_reason || '',
+    observed_metrics: parsed.observed_metrics || [],
     summary: parsed.summary || '',
     anomalies: parsed.anomalies || [],
     insights: parsed.insights || [],
