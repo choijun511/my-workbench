@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi';
 import { useConfirm } from '../components/ui/Dialog';
-import type { Agent, AgentKind, AgentStats, AgentStatus } from '../types';
+import type { Agent, AgentKind, AgentStats, AgentStatus, AgentTask, AgentTaskStatus } from '../types';
 import {
   Bot,
   Plus,
@@ -15,6 +15,13 @@ import {
   Power,
   RefreshCw,
   Clipboard,
+  Send,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronRight,
+  Terminal,
+  Loader2,
 } from 'lucide-react';
 
 const KIND_LABELS: Record<AgentKind, string> = {
@@ -227,7 +234,8 @@ function AgentDetail({ id, onChange }: { id: number; onChange: () => void }) {
     return <AgentEditor a={a} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); refetch(); onChange(); }} />;
   }
 
-  const heartbeatUrl = `${window.location.origin}/api/agents/${a.id}/heartbeat`;
+  const baseUrl = window.location.origin;
+  const heartbeatUrl = `${baseUrl}/api/agents/${a.id}/heartbeat`;
 
   return (
     <div className="space-y-4">
@@ -291,22 +299,11 @@ function AgentDetail({ id, onChange }: { id: number; onChange: () => void }) {
         </div>
       </div>
 
-      {/* Heartbeat instructions */}
-      <div className="bg-card rounded-xl border border-velvet p-5">
-        <h3 className="text-sm font-medium text-bone flex items-center gap-1.5 mb-2">
-          <RefreshCw size={13} /> 心跳上报
-        </h3>
-        <p className="text-xs text-haze mb-2">
-          让你的 Agent 周期性 POST 下面这个地址来更新状态。my-workbench 会根据 5 分钟内是否收到心跳来判断「失联」。
-        </p>
-        <CopyBlock label="POST URL" value={heartbeatUrl} />
-        <p className="text-xs text-haze mt-3 mb-1">请求体示例：</p>
-        <pre className="text-[11px] bg-stage rounded p-3 text-cream font-mono leading-relaxed overflow-x-auto">{`{
-  "status": "running",        // idle | running | error | disabled
-  "current_task": "正在抽取草稿 5/12",
-  "last_message": "Gemini API ok, 17 todos extracted"
-}`}</pre>
-      </div>
+      {/* Tasks panel */}
+      <TasksPanel agent={a} onUpdate={onChange} />
+
+      {/* Bridge / auth instructions */}
+      <BridgeBlock agent={a} baseUrl={baseUrl} heartbeatUrl={heartbeatUrl} onTokenRotated={refetch} />
 
       {/* Config */}
       {a.config && Object.keys(a.config).length > 0 && (
@@ -319,10 +316,264 @@ function AgentDetail({ id, onChange }: { id: number; onChange: () => void }) {
   );
 }
 
-function CopyBlock({ label, value }: { label: string; value: string }) {
+function TasksPanel({ agent, onUpdate }: { agent: Agent; onUpdate: () => void }) {
+  const { data: tasks, refetch } = useApi<AgentTask[]>(`/api/agents/${agent.id}/tasks?limit=20`);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const confirmDialog = useConfirm();
+
+  // Poll tasks every 3s so user sees status updates live
+  useEffect(() => {
+    const t = setInterval(() => refetch(), 3000);
+    return () => clearInterval(t);
+  }, [refetch]);
+
+  const send = async () => {
+    if (!input.trim() || agent.status === 'disabled') return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: input.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        await confirmDialog({ title: '派活失败', body: data.error || '未知错误', confirmLabel: '知道了', cancelLabel: '' });
+        return;
+      }
+      setInput('');
+      refetch();
+      onUpdate();
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const cancel = async (taskId: number) => {
+    await apiDelete(`/api/agents/tasks/${taskId}`);
+    refetch();
+  };
+
+  return (
+    <div className="bg-card rounded-xl border border-velvet p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-bone flex items-center gap-1.5">
+          <Terminal size={13} /> 任务
+        </h3>
+        {tasks && tasks.length > 0 && (
+          <span className="text-[11px] text-haze">
+            队列 {tasks.filter(t => t.status === 'queued').length} · 运行 {tasks.filter(t => t.status === 'running').length}
+          </span>
+        )}
+      </div>
+
+      {/* Send form */}
+      <div className="flex flex-col gap-2 mb-4">
+        <textarea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
+          }}
+          placeholder={agent.status === 'disabled' ? 'Agent 已停用，无法派活' : '派一个任务给它... (⌘+Enter 提交)'}
+          rows={2}
+          disabled={agent.status === 'disabled'}
+          className="w-full px-3 py-2 text-sm bg-stage border border-velvet rounded-md focus:outline-none focus:ring-2 focus:ring-gold text-cream disabled:opacity-50"
+        />
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={send}
+            disabled={sending || !input.trim() || agent.status === 'disabled'}
+            className="px-3 py-1.5 bg-gold text-stage-deep btn-glow-gold rounded-md text-xs font-medium hover:bg-gold/90 disabled:opacity-50 flex items-center gap-1"
+          >
+            {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+            {sending ? '排队中...' : '派活'}
+          </button>
+        </div>
+      </div>
+
+      {/* List */}
+      {!tasks ? (
+        <p className="text-xs text-haze">加载中...</p>
+      ) : tasks.length === 0 ? (
+        <p className="text-xs text-haze py-4 text-center">还没有任务</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {tasks.map(t => <TaskRow key={t.id} t={t} onCancel={cancel} />)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const TASK_STATUS_META: Record<AgentTaskStatus, { label: string; className: string }> = {
+  queued: { label: '排队中', className: 'bg-sunken text-haze' },
+  running: { label: '运行中', className: 'bg-electric/20 text-electric' },
+  done: { label: '已完成', className: 'bg-grass/20 text-grass' },
+  error: { label: '出错', className: 'bg-blood/20 text-blood' },
+  canceled: { label: '已取消', className: 'bg-fog/20 text-fog' },
+};
+
+function TaskRow({ t, onCancel }: { t: AgentTask; onCancel: (id: number) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const meta = TASK_STATUS_META[t.status];
+  const elapsedMs = t.finished_at && t.started_at
+    ? new Date(t.finished_at.replace(' ', 'T') + 'Z').getTime() - new Date(t.started_at.replace(' ', 'T') + 'Z').getTime()
+    : t.started_at
+      ? Date.now() - new Date(t.started_at.replace(' ', 'T') + 'Z').getTime()
+      : 0;
+  const elapsed = elapsedMs > 0 ? formatElapsed(elapsedMs) : '';
+  const canCancel = t.status === 'queued' || t.status === 'running';
+
+  return (
+    <li className="bg-stage/60 rounded-md border border-velvet/60">
+      <div className="flex items-start gap-2 px-3 py-2">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-haze hover:text-cream mt-0.5 flex-shrink-0"
+        >
+          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        </button>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 mt-0.5 ${meta.className}`}>
+          {meta.label}
+        </span>
+        <span className="text-sm text-cream truncate flex-1 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+          {t.input}
+        </span>
+        {elapsed && <span className="text-[10px] text-haze font-mono flex-shrink-0">{elapsed}</span>}
+        <span className="text-[10px] text-fog font-mono flex-shrink-0">#{t.id}</span>
+        {canCancel && (
+          <button
+            onClick={() => onCancel(t.id)}
+            className="text-haze hover:text-blood flex-shrink-0"
+            title="取消"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 space-y-2 border-t border-velvet/60">
+          <div>
+            <p className="text-[10px] text-haze uppercase tracking-wider mb-1">输入</p>
+            <pre className="text-xs text-cream bg-stage-deep/60 rounded p-2 whitespace-pre-wrap break-words font-mono leading-relaxed">{t.input}</pre>
+          </div>
+          {t.output && (
+            <div>
+              <p className="text-[10px] text-haze uppercase tracking-wider mb-1">输出</p>
+              <pre className="text-xs text-cream bg-stage-deep/60 rounded p-2 whitespace-pre-wrap break-words font-mono leading-relaxed max-h-96 overflow-y-auto">{t.output}</pre>
+            </div>
+          )}
+          {t.error && (
+            <div>
+              <p className="text-[10px] text-blood uppercase tracking-wider mb-1">错误</p>
+              <pre className="text-xs text-blood bg-blood/10 rounded p-2 whitespace-pre-wrap break-words font-mono leading-relaxed">{t.error}</pre>
+            </div>
+          )}
+          <p className="text-[10px] text-fog font-mono">
+            {formatTime(t.created_at)} 创建
+            {t.started_at && ` · ${formatTime(t.started_at)} 开始`}
+            {t.finished_at && ` · ${formatTime(t.finished_at)} 结束`}
+          </p>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function BridgeBlock({ agent, baseUrl, heartbeatUrl, onTokenRotated }: {
+  agent: Agent;
+  baseUrl: string;
+  heartbeatUrl: string;
+  onTokenRotated: () => void;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const confirmDialog = useConfirm();
+
+  const rotate = async () => {
+    const ok = await confirmDialog({
+      title: '重新生成 Token？',
+      body: '现有 bridge / agent 用到老 token 的会立即失效，需要重新部署。',
+      confirmLabel: '生成',
+      danger: true,
+    });
+    if (!ok) return;
+    setRotating(true);
+    try {
+      await apiPost(`/api/agents/${agent.id}/rotate-token`, {});
+      onTokenRotated();
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  const bridgeCmd = `node bridge.js --agent ${agent.id} --token ${agent.token} --base ${baseUrl}`;
+
+  return (
+    <div className="bg-card rounded-xl border border-velvet p-5 space-y-4">
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-bone flex items-center gap-1.5">
+            <Bot size={13} /> Agent Token
+          </h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setRevealed(!revealed)}
+              className="text-xs text-haze hover:text-cream flex items-center gap-1"
+            >
+              {revealed ? <EyeOff size={12} /> : <Eye size={12} />} {revealed ? '隐藏' : '查看'}
+            </button>
+            <button
+              onClick={rotate}
+              disabled={rotating}
+              className="text-xs text-haze hover:text-blood flex items-center gap-1"
+            >
+              <RefreshCw size={12} /> 重新生成
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-haze mb-2">
+          bridge / agent 用这个 token 拉任务和回传结果。**只在你自己机器上保存，别贴公开仓库**。
+        </p>
+        <CopyBlock label="Token" value={revealed ? agent.token : '••••••••••••••••••••••••••••••••••••'} actualValue={agent.token} />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-medium text-bone flex items-center gap-1.5 mb-2">
+          <Terminal size={13} /> 一行启动 Bridge（拉任务模式）
+        </h3>
+        <p className="text-xs text-haze mb-2">
+          在你本地仓库 <code className="text-electric font-mono">my-workbench/tools/openclaw-bridge/</code> 目录下：
+        </p>
+        <CopyBlock label="Shell" value={bridgeCmd} />
+        <p className="text-xs text-haze mt-3">
+          运行后 bridge 会长轮询任务、调用本地 <code className="text-electric font-mono">openclaw agent --message ...</code>、把结果传回来。
+          关掉 bridge 后 Agent 在 5 分钟内会被标「失联」。
+        </p>
+      </div>
+
+      <details className="text-xs">
+        <summary className="text-haze hover:text-cream cursor-pointer">不用 bridge，自己写心跳上报？</summary>
+        <div className="mt-2 space-y-2">
+          <CopyBlock label="POST URL" value={heartbeatUrl} />
+          <p className="text-xs text-haze">请求体示例：</p>
+          <pre className="text-[11px] bg-stage rounded p-3 text-cream font-mono leading-relaxed overflow-x-auto">{`{
+  "status": "running",
+  "current_task": "...",
+  "last_message": "..."
+}`}</pre>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function CopyBlock({ label, value, actualValue }: { label: string; value: string; actualValue?: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
-    navigator.clipboard.writeText(value).then(() => {
+    navigator.clipboard.writeText(actualValue ?? value).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -332,12 +583,21 @@ function CopyBlock({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] text-haze uppercase tracking-wider mb-1">{label}</p>
       <div className="flex items-center gap-2 bg-stage rounded px-3 py-2">
         <code className="text-xs text-cream font-mono break-all flex-1">{value}</code>
-        <button onClick={copy} className="text-xs text-haze hover:text-gold flex items-center gap-1">
+        <button onClick={copy} className="text-xs text-haze hover:text-gold flex items-center gap-1 flex-shrink-0">
           <Clipboard size={12} /> {copied ? '已复制' : '复制'}
         </button>
       </div>
     </div>
   );
+}
+
+function formatElapsed(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  const remSec = sec % 60;
+  return `${min}m${remSec.toString().padStart(2, '0')}s`;
 }
 
 function AgentCreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (a: Agent) => void }) {

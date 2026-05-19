@@ -207,9 +207,24 @@ export interface Agent {
   last_heartbeat_at: string | null;
   config: Record<string, any>;
   endpoint_url: string;
+  token: string;
   stale: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export type AgentTaskStatus = 'queued' | 'running' | 'done' | 'error' | 'canceled';
+export interface AgentTask {
+  id: number;
+  agent_id: number;
+  status: AgentTaskStatus;
+  input: string;
+  output: string | null;
+  error: string | null;
+  meta: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
 }
 
 export interface AgentStats {
@@ -219,5 +234,6 @@ export interface AgentStats {
   error: number;
   disabled: number;
   stale: number;
+  queued_tasks: number;
   total: number;
 }

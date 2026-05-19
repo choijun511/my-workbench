@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -198,11 +199,41 @@ db.exec(`
     last_heartbeat_at TEXT,                      -- last time the agent pinged
     config TEXT DEFAULT '{}',                    -- JSON
     endpoint_url TEXT DEFAULT '',                -- optional pingable URL
+    token TEXT,                                  -- shared secret used by bridge/agent to authenticate
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
 
   CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+
+  CREATE TABLE IF NOT EXISTS agent_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'queued',                -- queued | running | done | error | canceled
+    input TEXT NOT NULL,
+    output TEXT,
+    error TEXT,
+    meta TEXT DEFAULT '{}',                      -- JSON
+    created_at TEXT DEFAULT (datetime('now')),
+    started_at TEXT,
+    finished_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_agent_tasks_lookup ON agent_tasks(agent_id, status, created_at);
 `);
+
+// Backfill tokens for any agent that doesn't have one. Older DBs may not have the column;
+// add it first, THEN create the index that depends on it, THEN backfill.
+const agentColsList = db.prepare("PRAGMA table_info(agents)").all() as { name: string }[];
+const agentColSet = new Set(agentColsList.map(c => c.name));
+if (agentColsList.length && !agentColSet.has('token')) {
+  db.exec(`ALTER TABLE agents ADD COLUMN token TEXT`);
+}
+db.exec(`CREATE INDEX IF NOT EXISTS idx_agents_token ON agents(token)`);
+const tokenlessAgents = db.prepare(`SELECT id FROM agents WHERE token IS NULL OR token = ''`).all() as Array<{ id: number }>;
+const setTokenStmt = db.prepare(`UPDATE agents SET token = ? WHERE id = ?`);
+for (const a of tokenlessAgents) {
+  setTokenStmt.run('agt_' + crypto.randomBytes(16).toString('hex'), a.id);
+}
 
 export default db;

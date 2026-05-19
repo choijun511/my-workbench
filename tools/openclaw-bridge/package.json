@@ -1,0 +1,14 @@
+{
+  "name": "openclaw-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pulls queued tasks from my-workbench and runs them through a local CLI agent (default: openclaw).",
+  "type": "commonjs",
+  "main": "bridge.js",
+  "scripts": {
+    "start": "node bridge.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
